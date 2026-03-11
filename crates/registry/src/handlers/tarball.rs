@@ -11,6 +11,7 @@ use npm_entity::{package_versions, packages};
 use sea_orm::{ColumnTrait, EntityTrait, ModelTrait, QueryFilter};
 
 use crate::{
+    auth::AuthUser,
     error::RegistryError,
     state::AppState,
 };
@@ -18,6 +19,7 @@ use crate::{
 /// `GET /{package}/-/{filename}`
 pub async fn get_tarball(
     State(state): State<AppState>,
+    _auth: AuthUser,
     Path((package, filename)): Path<(String, String)>,
 ) -> Result<Response, RegistryError> {
     let version = version_from_filename(&package, &filename).ok_or_else(|| {
@@ -29,6 +31,7 @@ pub async fn get_tarball(
 /// `GET /@{scope}/{name}/-/{filename}`
 pub async fn get_scoped_tarball(
     State(state): State<AppState>,
+    _auth: AuthUser,
     Path((scope, name, filename)): Path<(String, String, String)>,
 ) -> Result<Response, RegistryError> {
     let full_name = format!("@{}/{}", scope, name);

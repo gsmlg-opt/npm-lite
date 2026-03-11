@@ -29,9 +29,11 @@ use axum::{
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use bytes::Bytes;
 use npm_core::{integrity::compute_integrity, validation::validate_package_name};
+use npm_db::AclRepo;
 use npm_entity::{dist_tags, package_versions, packages, publish_events};
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter, TransactionTrait,
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter,
+    TransactionTrait,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -129,6 +131,50 @@ async fn do_publish(
         ));
     }
 
+    // 5. ACL check: if the package already exists and has ACL entries, verify
+    //    the publishing user holds at least "publish" permission.  If there are
+    //    NO ACL entries at all we allow the operation (permissive default for
+    //    new packages or packages that have not yet been access-controlled).
+    {
+        use npm_entity::package_acl::Column as AclCol;
+        use npm_entity::package_acl::Entity as AclEntity;
+
+        let pkg_row = packages::Entity::find()
+            .filter(packages::Column::Name.eq(&package_name))
+            .one(&state.db)
+            .await?;
+
+        if let Some(ref pkg) = pkg_row {
+            // Package already exists – check if any ACL entries are configured.
+            let acl_count = AclEntity::find()
+                .filter(AclCol::PackageId.eq(pkg.id))
+                .count(&state.db)
+                .await
+                .map_err(|e| RegistryError::Internal(e.to_string()))?;
+
+            if acl_count > 0 {
+                // ACL entries exist – enforce permission.
+                let allowed = AclRepo::check_permission(
+                    &state.db,
+                    actor_id,
+                    &package_name,
+                    "publish",
+                )
+                .await
+                .map_err(|e| RegistryError::Internal(e.to_string()))?;
+
+                if !allowed {
+                    return Err(RegistryError::Forbidden(format!(
+                        "user does not have publish permission on package '{}'",
+                        package_name
+                    )));
+                }
+            }
+            // If acl_count == 0: no entries configured – allow (permissive default).
+        }
+        // If pkg_row is None: new package – allow.
+    }
+
     // Destructure body into owned parts to avoid borrow issues.
     let PublishBody {
         description,
@@ -141,19 +187,19 @@ async fn do_publish(
     let (version_str, version_meta) = versions.into_iter().next().unwrap();
     let (_attachment_name, attachment) = attachments.into_iter().next().unwrap();
 
-    // 5. Decode the tarball.
+    // 6. Decode the tarball.
     let tarball_bytes: Bytes = STANDARD
         .decode(&attachment.data)
         .map(Bytes::from)
         .map_err(|e| RegistryError::BadRequest(format!("attachment data is not valid base64: {}", e)))?;
 
-    // 6. Compute integrity hashes.
+    // 7. Compute integrity hashes.
     let hashes = compute_integrity(&tarball_bytes);
 
-    // 7. Determine S3 key.
+    // 8. Determine S3 key.
     let s3_key = build_s3_key(&package_name, &version_str);
 
-    // 8. Upload tarball to S3.
+    // 9. Upload tarball to S3.
     state
         .storage
         .upload(
@@ -164,7 +210,7 @@ async fn do_publish(
         .await
         .map_err(RegistryError::Storage)?;
 
-    // 9. Persist to DB in a transaction. On failure, attempt a compensating S3
+    // 10. Persist to DB in a transaction. On failure, attempt a compensating S3
     //    delete so the bucket doesn't accumulate orphaned blobs.
     let db_result = persist_publish(
         &state,
@@ -199,7 +245,7 @@ async fn do_publish(
 
     db_result?;
 
-    // 10. Return npm-compatible success response.
+    // 11. Return npm-compatible success response.
     Ok((
         StatusCode::CREATED,
         Json(json!({

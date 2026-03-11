@@ -12,6 +12,7 @@ use sea_orm::{ColumnTrait, EntityTrait, ModelTrait, QueryFilter};
 use serde_json::{json, Value};
 
 use crate::{
+    auth::AuthUser,
     error::{RegistryError, Result},
     state::AppState,
 };
@@ -23,6 +24,7 @@ use crate::{
 /// `GET /{package}` – plain (non-scoped) package packument.
 pub async fn get_packument(
     State(state): State<AppState>,
+    _auth: AuthUser,
     Path(package): Path<String>,
 ) -> Result<Json<Value>> {
     build_packument(&state, &package).await
@@ -31,6 +33,7 @@ pub async fn get_packument(
 /// `GET /@{scope}/{name}` – scoped package packument.
 pub async fn get_scoped_packument(
     State(state): State<AppState>,
+    _auth: AuthUser,
     Path((scope, name)): Path<(String, String)>,
 ) -> Result<Json<Value>> {
     let full_name = format!("@{}/{}", scope, name);

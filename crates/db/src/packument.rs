@@ -14,10 +14,32 @@ use npm_entity::{
 
 use crate::error::{DbError, Result};
 
+/// Construct the fully-qualified tarball URL for `package_name` at `version`.
+fn build_tarball_url(registry_url: &str, package_name: &str, version: &str) -> String {
+    let base = registry_url.trim_end_matches('/');
+    if let Some(rest) = package_name.strip_prefix('@') {
+        // Scoped: @scope/name  →  {base}/@scope/name/-/name-{version}.tgz
+        let slash = rest.find('/').unwrap_or(rest.len());
+        let name = &rest[slash + 1..];
+        let scope = &rest[..slash];
+        format!("{}/@{}/{}/-/{}-{}.tgz", base, scope, name, name, version)
+    } else {
+        // Plain: {base}/{name}/-/{name}-{version}.tgz
+        format!("{}/{}/-/{}-{}.tgz", base, package_name, package_name, version)
+    }
+}
+
 /// Build the npm packument JSON for `package_name`.
 ///
+/// `registry_url` is the base URL of the registry (e.g. `https://registry.example.com`)
+/// used to construct fully-qualified tarball download URLs.
+///
 /// Returns `DbError::NotFound` when the package does not exist in the database.
-pub async fn build_packument(db: &DatabaseConnection, package_name: &str) -> Result<Value> {
+pub async fn build_packument(
+    db: &DatabaseConnection,
+    package_name: &str,
+    registry_url: &str,
+) -> Result<Value> {
     // 1. Look up the package row.
     let package = PkgEntity::find()
         .filter(PkgCol::Name.eq(package_name))
@@ -72,10 +94,11 @@ pub async fn build_packument(db: &DatabaseConnection, package_name: &str) -> Res
             .or_insert_with(|| Value::String(ver.version.clone()));
 
         // Inject the `dist` block with tarball information.
+        let tarball_url = build_tarball_url(registry_url, package_name, &ver.version);
         let dist = json!({
             "shasum": ver.shasum,
             "integrity": ver.integrity,
-            "tarball": format!("/-/{}/{}/-/{}-{}.tgz", package_name, ver.version, package_name, ver.version),
+            "tarball": tarball_url,
         });
         ver_obj.insert("dist".to_string(), dist);
 

@@ -2,7 +2,7 @@ use axum::{extract::{Query, State}, Json};
 use serde::{Deserialize};
 use serde_json::{json, Value};
 use npm_db::PackageRepo;
-use crate::{state::AppState, error::RegistryError};
+use crate::{auth::AuthUser, state::AppState, error::RegistryError};
 
 #[derive(Deserialize)]
 pub struct SearchQuery {
@@ -13,6 +13,7 @@ pub struct SearchQuery {
 
 pub async fn search(
     State(state): State<AppState>,
+    _auth: AuthUser,
     Query(query): Query<SearchQuery>,
 ) -> Result<Json<Value>, RegistryError> {
     let text = query.text.unwrap_or_default();

@@ -11,6 +11,7 @@ use sea_orm::{ColumnTrait, EntityTrait, ModelTrait, QueryFilter};
 use serde_json::{json, Value};
 
 use crate::{
+    auth::AuthUser,
     error::{RegistryError, Result},
     state::AppState,
 };
@@ -25,6 +26,7 @@ use crate::{
 /// (`@babel/core/7.0.0` – handled by the scoped variant below) are supported.
 pub async fn get_version(
     State(state): State<AppState>,
+    _auth: AuthUser,
     Path((package, version)): Path<(String, String)>,
 ) -> Result<Json<Value>> {
     fetch_version_metadata(&state, &package, &version).await
@@ -33,6 +35,7 @@ pub async fn get_version(
 /// `GET /@{scope}/{name}/{version}` – scoped package version metadata.
 pub async fn get_scoped_version(
     State(state): State<AppState>,
+    _auth: AuthUser,
     Path((scope, name, version)): Path<(String, String, String)>,
 ) -> Result<Json<Value>> {
     let full_name = format!("@{}/{}", scope, name);

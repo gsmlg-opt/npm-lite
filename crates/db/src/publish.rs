@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 use npm_entity::{
     dist_tags,
+    package_acl,
     package_versions::{self, Column as VersionCol, Entity as VersionEntity},
     packages::{self, Column as PkgCol, Entity as PkgEntity},
     publish_events,
@@ -117,7 +118,21 @@ pub async fn execute_publish(
                             created_at: Set(now),
                             updated_at: Set(now),
                         };
-                        active.insert(txn).await?
+                        let inserted_pkg = active.insert(txn).await?;
+
+                        // Grant the publishing user admin permission on the new package.
+                        let acl_entry = package_acl::ActiveModel {
+                            id: Set(Uuid::new_v4()),
+                            package_id: Set(Some(inserted_pkg.id)),
+                            scope: Set(None),
+                            user_id: Set(Some(actor_id)),
+                            team_id: Set(None),
+                            permission: Set("admin".to_string()),
+                            created_at: Set(now),
+                        };
+                        acl_entry.insert(txn).await?;
+
+                        inserted_pkg
                     }
                 };
 
