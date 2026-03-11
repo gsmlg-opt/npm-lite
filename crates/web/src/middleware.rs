@@ -22,9 +22,17 @@ fn extract_admin_cookie(cookie_header: &str) -> Option<&str> {
     None
 }
 
+/// Extension inserted by the admin session middleware so handlers can identify
+/// the logged-in admin user without re-querying.
+#[derive(Clone, Debug)]
+pub struct AdminSession {
+    pub user_id: uuid::Uuid,
+    pub username: String,
+}
+
 pub async fn require_admin_session(
     State(state): State<AppState>,
-    request: Request,
+    mut request: Request,
     next: Next,
 ) -> Response {
     let redirect = Redirect::to("/admin/login").into_response();
@@ -40,18 +48,22 @@ pub async fn require_admin_session(
     };
 
     // Validate that the username corresponds to an actual admin user in the DB.
-    let is_admin = npm_entity::users::Entity::find()
+    let admin_user = npm_entity::users::Entity::find()
         .filter(npm_entity::users::Column::Username.eq(&username))
         .filter(npm_entity::users::Column::Role.eq("admin"))
         .one(&state.db)
         .await
         .ok()
-        .flatten()
-        .is_some();
+        .flatten();
 
-    if !is_admin {
-        return redirect;
+    match admin_user {
+        Some(user) => {
+            request.extensions_mut().insert(AdminSession {
+                user_id: user.id,
+                username: user.username,
+            });
+            next.run(request).await
+        }
+        None => redirect,
     }
-
-    next.run(request).await
 }

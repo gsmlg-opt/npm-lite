@@ -1,7 +1,7 @@
 use axum::{
     extract::{Path, Query, State},
     response::{Html, Redirect},
-    Form,
+    Extension, Form,
 };
 use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder};
 use serde::Deserialize;
@@ -12,6 +12,7 @@ use npm_entity::{dist_tags, package_versions, packages, publish_events};
 
 use crate::{
     error::{WebError, WebResult},
+    middleware::AdminSession,
     state::AppState,
     templates::{html_escape, layout, page_heading},
 };
@@ -380,9 +381,10 @@ pub struct VersionUnpublishPath {
     pub version: String,
 }
 
-#[instrument(skip(state))]
+#[instrument(skip(state, session))]
 pub async fn version_unpublish(
     State(state): State<AppState>,
+    Extension(session): Extension<AdminSession>,
     Path(path): Path<VersionUnpublishPath>,
 ) -> WebResult<Redirect> {
     use chrono::Utc;
@@ -398,6 +400,7 @@ pub async fn version_unpublish(
     let version = package_versions::Entity::find()
         .filter(package_versions::Column::PackageId.eq(pkg.id))
         .filter(package_versions::Column::Version.eq(&path.version))
+        .filter(package_versions::Column::DeletedAt.is_null())
         .one(db)
         .await?
         .ok_or(WebError::NotFound)?;
@@ -409,13 +412,20 @@ pub async fn version_unpublish(
     active.deleted_at = Set(Some(Utc::now().into()));
     active.update(db).await?;
 
-    // Record unpublish event
+    // Remove dist-tags pointing to this version so they don't become orphaned.
+    dist_tags::Entity::delete_many()
+        .filter(dist_tags::Column::PackageId.eq(pkg.id))
+        .filter(dist_tags::Column::VersionId.eq(version_id))
+        .exec(db)
+        .await?;
+
+    // Record unpublish event with actual admin user ID.
     let event = publish_events::ActiveModel {
         id: Set(Uuid::new_v4()),
         package_id: Set(pkg.id),
         version_id: Set(Some(version_id)),
         action: Set("unpublish".to_string()),
-        actor_id: Set(Uuid::nil()),
+        actor_id: Set(session.user_id),
         success: Set(true),
         error_message: Set(None),
         created_at: Set(Utc::now().into()),

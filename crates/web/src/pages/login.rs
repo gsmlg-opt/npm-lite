@@ -88,7 +88,7 @@ pub async fn login_post(
     // Set a simple session cookie containing the username.
     // In production, use a signed/encrypted cookie or proper session store.
     let cookie_value = format!(
-        "admin_user={}; HttpOnly; SameSite=Lax; Path=/admin",
+        "admin_user={}; HttpOnly; Secure; SameSite=Lax; Path=/admin",
         html_escape(&form.username),
     );
 

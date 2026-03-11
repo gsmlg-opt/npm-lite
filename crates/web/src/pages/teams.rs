@@ -286,6 +286,11 @@ pub async fn team_remove_member(
         .await?
         .ok_or(WebError::NotFound)?;
 
+    // Validate that the member actually belongs to the specified team.
+    if member.team_id != team_id {
+        return Err(WebError::NotFound);
+    }
+
     member.delete(db).await?;
 
     Ok(Redirect::to(&format!("/admin/teams/{team_id}")))

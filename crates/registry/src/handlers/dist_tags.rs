@@ -17,6 +17,10 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use uuid::Uuid;
 
+use npm_db::AclRepo;
+use npm_entity::package_acl;
+use sea_orm::PaginatorTrait;
+
 use crate::{
     auth::{AuthUser, PublishUser},
     error::{RegistryError, Result},
@@ -36,10 +40,11 @@ pub async fn list_dist_tags(
 
     let tag_rows: Vec<dist_tags::Model> = pkg.find_related(dist_tags::Entity).all(&state.db).await?;
 
-    // Build { tag -> version_str } map.
+    // Build { tag -> version_str } map, excluding soft-deleted versions.
     let version_ids: Vec<Uuid> = tag_rows.iter().map(|t| t.version_id).collect();
     let versions: Vec<package_versions::Model> = package_versions::Entity::find()
         .filter(package_versions::Column::Id.is_in(version_ids))
+        .filter(package_versions::Column::DeletedAt.is_null())
         .all(&state.db)
         .await?;
 
@@ -62,11 +67,22 @@ pub async fn list_dist_tags(
 /// Body is just a plain JSON string: `"1.2.3"`.
 pub async fn set_dist_tag(
     State(state): State<AppState>,
-    PublishUser(_user): PublishUser,
+    PublishUser(user): PublishUser,
     Path((package, tag)): Path<(String, String)>,
     Json(version_str): Json<String>,
 ) -> Result<Json<Value>> {
+    // Validate dist-tag name: must be non-empty, lowercase ASCII alphanumeric + hyphens + dots.
+    if tag.is_empty() || !tag.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '.') {
+        return Err(RegistryError::BadRequest(format!(
+            "invalid dist-tag name '{}': must be lowercase alphanumeric, hyphens, or dots",
+            tag
+        )));
+    }
+
     let pkg = resolve_package(&state, &package).await?;
+
+    // ACL check: enforce publish permission if ACL entries exist.
+    check_package_acl(&state, user.user_id, &package, pkg.id).await?;
 
     // Find the version the tag should point to.
     let ver = pkg
@@ -110,7 +126,7 @@ pub async fn set_dist_tag(
         }
     }
 
-    Ok(Json(json!({ "ok": true, tag: version_str })))
+    Ok(Json(json!({ "ok": true, "tag": version_str })))
 }
 
 // ---------------------------------------------------------------------------
@@ -119,7 +135,7 @@ pub async fn set_dist_tag(
 
 pub async fn delete_dist_tag(
     State(state): State<AppState>,
-    PublishUser(_user): PublishUser,
+    PublishUser(user): PublishUser,
     Path((package, tag)): Path<(String, String)>,
 ) -> Result<(StatusCode, Json<Value>)> {
     // Refuse to remove the "latest" tag.
@@ -130,6 +146,9 @@ pub async fn delete_dist_tag(
     }
 
     let pkg = resolve_package(&state, &package).await?;
+
+    // ACL check: enforce publish permission if ACL entries exist.
+    check_package_acl(&state, user.user_id, &package, pkg.id).await?;
 
     let existing = dist_tags::Entity::find()
         .filter(dist_tags::Column::PackageId.eq(pkg.id))
@@ -156,4 +175,31 @@ async fn resolve_package(
         .one(&state.db)
         .await?
         .ok_or_else(|| RegistryError::NotFound(format!("package '{}' not found", package_name)))
+}
+
+/// Check ACL permission for a package. If ACL entries exist, enforce publish permission.
+async fn check_package_acl(
+    state: &AppState,
+    user_id: uuid::Uuid,
+    package_name: &str,
+    package_id: uuid::Uuid,
+) -> Result<()> {
+    let acl_count = package_acl::Entity::find()
+        .filter(package_acl::Column::PackageId.eq(package_id))
+        .count(&state.db)
+        .await
+        .map_err(|e| RegistryError::Internal(e.to_string()))?;
+
+    if acl_count > 0 {
+        let allowed = AclRepo::check_permission(&state.db, user_id, package_name, "publish")
+            .await
+            .map_err(|e| RegistryError::Internal(e.to_string()))?;
+        if !allowed {
+            return Err(RegistryError::Forbidden(format!(
+                "user does not have publish permission on package '{}'",
+                package_name
+            )));
+        }
+    }
+    Ok(())
 }

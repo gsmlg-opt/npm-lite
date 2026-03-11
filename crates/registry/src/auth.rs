@@ -106,18 +106,14 @@ where
         // Hash the token for DB lookup (tokens are stored hashed).
         let token_hash = npm_core::auth::hash_token(raw_token);
 
-        // Look up the token record.
+        // Look up the token record (only non-revoked tokens).
         let token_model = tokens::Entity::find()
             .filter(tokens::Column::TokenHash.eq(&token_hash))
+            .filter(tokens::Column::RevokedAt.is_null())
             .one(&app_state.db)
             .await
             .map_err(|_| AuthRejection(StatusCode::INTERNAL_SERVER_ERROR, "database error"))?
             .ok_or(AuthRejection(StatusCode::UNAUTHORIZED, "invalid token"))?;
-
-        // Reject revoked tokens.
-        if token_model.revoked_at.is_some() {
-            return Err(AuthRejection(StatusCode::UNAUTHORIZED, "token has been revoked"));
-        }
 
         // Resolve the owning user.
         let user_model = users::Entity::find_by_id(token_model.user_id)

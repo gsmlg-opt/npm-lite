@@ -304,7 +304,7 @@ async fn persist_publish(
             let new_pkg = packages::ActiveModel {
                 id: Set(Uuid::new_v4()),
                 name: Set(package_name.to_string()),
-                scope: Set(scope),
+                scope: Set(scope.clone()),
                 description: Set(description.clone()),
                 created_at: Set(now),
                 updated_at: Set(now),
@@ -315,7 +315,7 @@ async fn persist_publish(
             let acl_entry = npm_entity::package_acl::ActiveModel {
                 id: Set(Uuid::new_v4()),
                 package_id: Set(Some(inserted.id)),
-                scope: Set(None),
+                scope: Set(scope.clone()),
                 user_id: Set(Some(*actor_id)),
                 team_id: Set(None),
                 permission: Set("admin".to_string()),

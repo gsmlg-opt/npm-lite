@@ -40,14 +40,14 @@ impl AclRepo {
             .await?;
 
         let (package_id, scope) = match package {
-            Some(p) => (Some(p.id), p.scope),
+            Some(p) => (p.id, p.scope),
             None => return Ok(false),
         };
 
         // Collect all ACL entries that might apply: direct user entries for
         // this package or scope, or team entries where the user is a member.
         let mut pkg_or_scope_cond = sea_orm::Condition::any()
-            .add(Column::PackageId.eq(package_id.unwrap()));
+            .add(Column::PackageId.eq(package_id));
         if let Some(ref s) = scope {
             pkg_or_scope_cond = pkg_or_scope_cond.add(Column::Scope.eq(s.as_str()));
         }
@@ -79,7 +79,7 @@ impl AclRepo {
                 .filter(Column::TeamId.eq(membership.team_id))
                 .filter(
                     sea_orm::Condition::any()
-                        .add(Column::PackageId.eq(package_id.unwrap()))
+                        .add(Column::PackageId.eq(package_id))
                         .add(Column::PackageId.is_null()),
                 )
                 .all(db)

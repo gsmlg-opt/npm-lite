@@ -14,7 +14,7 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use npm_entity::{package_versions, packages, publish_events};
+use npm_entity::{dist_tags, package_versions, packages, publish_events};
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, ModelTrait, QueryFilter,
     TransactionTrait,
@@ -69,6 +69,13 @@ pub async fn unpublish_version(
     let mut active: package_versions::ActiveModel = ver.into();
     active.deleted_at = Set(Some(now));
     active.update(&state.db).await?;
+
+    // Remove dist-tags pointing to this version so they don't become orphaned.
+    dist_tags::Entity::delete_many()
+        .filter(dist_tags::Column::PackageId.eq(pkg.id))
+        .filter(dist_tags::Column::VersionId.eq(version_id))
+        .exec(&state.db)
+        .await?;
 
     // Record the unpublish event.
     let event = publish_events::ActiveModel {
@@ -131,6 +138,12 @@ pub async fn unpublish_package(
     let unpublished_count = versions.len() as u32;
 
     let txn = state.db.begin().await?;
+
+    // Remove all dist-tags for this package (all versions being deleted).
+    dist_tags::Entity::delete_many()
+        .filter(dist_tags::Column::PackageId.eq(pkg.id))
+        .exec(&txn)
+        .await?;
 
     for ver in versions {
         let version_id = ver.id;
