@@ -1,0 +1,21 @@
+[package]
+name = "npm-web"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+npm-core = { workspace = true }
+npm-db = { workspace = true }
+npm-registry = { workspace = true }
+npm-entity = { workspace = true }
+thiserror = { workspace = true }
+axum = { workspace = true }
+axum-extra = { workspace = true }
+sea-orm = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+tower = { workspace = true }
