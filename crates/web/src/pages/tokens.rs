@@ -1,14 +1,15 @@
 use axum::{
     extract::{Path, State},
+    http::header,
     response::{Html, Redirect},
     Form,
 };
-use sea_orm::{ActiveModelTrait, ActiveValue::Set, EntityTrait, QueryOrder};
+use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
 use serde::Deserialize;
 use tracing::instrument;
 use uuid::Uuid;
 
-use npm_entity::tokens;
+use npm_entity::{tokens, users};
 
 use crate::{
     error::{WebError, WebResult},
@@ -80,10 +81,35 @@ pub async fn token_list_page(State(state): State<AppState>) -> WebResult<Html<St
         )
     };
 
-    let create_form = r#"<div class="card bg-base-200 shadow max-w-md">
+    // Load users for the dropdown.
+    let all_users = users::Entity::find()
+        .order_by_asc(users::Column::Username)
+        .all(db)
+        .await?;
+
+    let user_options: String = all_users
+        .iter()
+        .map(|u| {
+            format!(
+                r#"<option value="{id}">{username} ({role})</option>"#,
+                id = u.id,
+                username = html_escape(&u.username),
+                role = html_escape(&u.role),
+            )
+        })
+        .collect();
+
+    let create_form = format!(
+        r#"<div class="card bg-base-200 shadow max-w-md">
   <div class="card-body">
     <h2 class="card-title text-lg">Create Token</h2>
     <form method="post" action="/admin/tokens" class="flex flex-col gap-3">
+      <label class="form-control">
+        <div class="label"><span class="label-text">User</span></div>
+        <select name="user_id" required class="select select-bordered">
+          {user_options}
+        </select>
+      </label>
       <label class="form-control">
         <div class="label"><span class="label-text">Name (optional)</span></div>
         <input type="text" name="name" placeholder="CI/CD token" class="input input-bordered" />
@@ -99,7 +125,8 @@ pub async fn token_list_page(State(state): State<AppState>) -> WebResult<Html<St
       <button type="submit" class="btn btn-primary">Create Token</button>
     </form>
   </div>
-</div>"#;
+</div>"#,
+    );
 
     let content = format!(
         "{heading}{table}{create_form}",
@@ -111,6 +138,7 @@ pub async fn token_list_page(State(state): State<AppState>) -> WebResult<Html<St
 
 #[derive(Debug, Deserialize)]
 pub struct CreateTokenForm {
+    pub user_id: Uuid,
     pub name: Option<String>,
     pub role: String,
 }
@@ -128,10 +156,6 @@ pub async fn token_create(
     let raw_token = generate_token();
     let token_hash = npm_core::auth::hash_token(&raw_token);
 
-    // Use a placeholder user id (admin user should exist from setup)
-    // In a real implementation, derive from session cookie.
-    let placeholder_user_id = Uuid::nil();
-
     let name = form
         .name
         .as_deref()
@@ -146,7 +170,7 @@ pub async fn token_create(
 
     let model = tokens::ActiveModel {
         id: Set(Uuid::new_v4()),
-        user_id: Set(placeholder_user_id),
+        user_id: Set(form.user_id),
         token_hash: Set(token_hash),
         role: Set(role),
         name: Set(name),
