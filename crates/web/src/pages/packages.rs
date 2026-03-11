@@ -156,12 +156,14 @@ pub async fn package_detail_page(
         .await?
         .ok_or(WebError::NotFound)?;
 
+    // Fetch ALL versions (including soft-deleted) so they are shown in the UI.
     let versions = package_versions::Entity::find()
         .filter(package_versions::Column::PackageId.eq(pkg.id))
-        .filter(package_versions::Column::DeletedAt.is_null())
         .order_by_desc(package_versions::Column::CreatedAt)
         .all(db)
         .await?;
+
+    let active_count = versions.iter().filter(|v| v.deleted_at.is_none()).count();
 
     let tags = dist_tags::Entity::find()
         .filter(dist_tags::Column::PackageId.eq(pkg.id))
@@ -195,6 +197,7 @@ pub async fn package_detail_page(
         .map(|v| {
             let size_kb = v.size / 1024;
             let ts = v.created_at.format("%Y-%m-%d %H:%M UTC").to_string();
+            let is_deleted = v.deleted_at.is_some();
             let tag_badges: String = tag_map
                 .get(&v.id)
                 .map(|tags| {
@@ -208,9 +211,16 @@ pub async fn package_detail_page(
                         .collect()
                 })
                 .unwrap_or_default();
+            let deleted_badge = if is_deleted {
+                r#" <span class="badge badge-error badge-sm">unpublished</span>"#
+            } else {
+                ""
+            };
+            let row_class = if is_deleted { r#" class="opacity-50""# } else { "" };
+            let ver_style = if is_deleted { " line-through" } else { "" };
             format!(
-                r#"<tr>
-  <td class="font-mono">{ver}</td>
+                r#"<tr{row_class}>
+  <td class="font-mono{ver_style}">{ver}{deleted_badge}</td>
   <td>{tags}</td>
   <td class="text-sm opacity-70">{size} KB</td>
   <td class="text-sm opacity-60">{ts}</td>
@@ -229,6 +239,7 @@ pub async fn package_detail_page(
             r#"<div class="overflow-x-auto mt-4">
 <table class="table table-zebra">
   <thead><tr><th>Version</th><th>Tags</th><th>Size</th><th>Published</th></tr></thead>
+
   <tbody>{ver_rows}</tbody>
 </table>
 </div>"#,
@@ -243,14 +254,15 @@ pub async fn package_detail_page(
 <p class="text-base opacity-70 mb-6">{desc}</p>
 <div class="card bg-base-200 shadow">
   <div class="card-body">
-    <h2 class="card-title">Versions ({count})</h2>
+    <h2 class="card-title">Versions ({active_count} active, {total_count} total)</h2>
     {ver_table}
   </div>
 </div>"#,
         name = html_escape(&pkg.name),
         scope = scope,
         desc = html_escape(desc),
-        count = versions.len(),
+        active_count = active_count,
+        total_count = versions.len(),
     );
 
     Ok(Html(layout(&pkg.name, &content)))

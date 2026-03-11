@@ -2,5 +2,7 @@ pub mod activity;
 pub mod dashboard;
 pub mod login;
 pub mod packages;
+pub mod settings;
 pub mod teams;
 pub mod tokens;
+pub mod users;

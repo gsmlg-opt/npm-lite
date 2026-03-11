@@ -18,7 +18,9 @@ use pages::{
     login::{login_page, login_post, logout},
     packages::{package_detail_page, package_list_page},
     teams::{team_add_member, team_create, team_detail_page, team_list_page, team_remove_member},
+    settings::settings_page,
     tokens::{token_create, token_list_page, token_revoke},
+    users::{user_create, user_list_page},
 };
 
 /// Build the admin web UI router.
@@ -43,6 +45,10 @@ pub fn web_router(state: AppState) -> Router<AppState> {
             "/teams/{team_id}/members/{member_id}/remove",
             post(team_remove_member),
         )
+        // Users
+        .route("/users", get(user_list_page).post(user_create))
+        // Settings
+        .route("/settings", get(settings_page))
         // Activity log
         .route("/activity", get(activity_page))
         .layer(from_fn_with_state(state, middleware::require_admin_session));

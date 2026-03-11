@@ -26,8 +26,10 @@ pub fn layout(title: &str, content: &str) -> String {
         <li><a href="/admin/" class="btn btn-ghost btn-sm">Dashboard</a></li>
         <li><a href="/admin/packages" class="btn btn-ghost btn-sm">Packages</a></li>
         <li><a href="/admin/tokens" class="btn btn-ghost btn-sm">Tokens</a></li>
+        <li><a href="/admin/users" class="btn btn-ghost btn-sm">Users</a></li>
         <li><a href="/admin/teams" class="btn btn-ghost btn-sm">Teams</a></li>
         <li><a href="/admin/activity" class="btn btn-ghost btn-sm">Activity</a></li>
+        <li><a href="/admin/settings" class="btn btn-ghost btn-sm">Settings</a></li>
         <li><a href="/admin/login" class="btn btn-outline btn-sm btn-primary">Login</a></li>
       </ul>
     </div>

@@ -1,5 +1,5 @@
 use axum::{extract::State, response::Html};
-use sea_orm::{EntityTrait, PaginatorTrait, QueryOrder, QuerySelect};
+use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect};
 use tracing::instrument;
 
 use npm_entity::{packages, package_versions, publish_events};
@@ -95,9 +95,61 @@ pub async fn dashboard_page(State(state): State<AppState>) -> WebResult<Html<Str
         )
     };
 
+    // Fetch recent failed events.
+    let failed_events = publish_events::Entity::find()
+        .filter(publish_events::Column::Success.eq(false))
+        .order_by_desc(publish_events::Column::CreatedAt)
+        .limit(5)
+        .all(db)
+        .await?;
+
+    let error_section = if failed_events.is_empty() {
+        String::new()
+    } else {
+        let error_rows: String = failed_events
+            .iter()
+            .map(|evt| {
+                let pkg_name = pkg_map
+                    .get(&evt.package_id)
+                    .map(|s| s.as_str())
+                    .unwrap_or("(unknown)");
+                let err_msg = evt
+                    .error_message
+                    .as_deref()
+                    .unwrap_or("(no details)");
+                let ts = evt.created_at.format("%Y-%m-%d %H:%M UTC").to_string();
+                format!(
+                    r#"<tr>
+  <td class="font-mono">{pkg_name}</td>
+  <td>{action}</td>
+  <td class="text-sm text-error">{err_msg}</td>
+  <td class="text-sm opacity-70">{ts}</td>
+</tr>"#,
+                    action = crate::templates::html_escape(&evt.action),
+                    err_msg = crate::templates::html_escape(err_msg),
+                )
+            })
+            .collect();
+
+        format!(
+            r#"<div class="card bg-base-200 shadow mb-6 border border-error/30">
+  <div class="card-body">
+    <h2 class="card-title text-lg text-error mb-4">Recent Errors</h2>
+    <div class="overflow-x-auto">
+      <table class="table table-zebra">
+        <thead><tr><th>Package</th><th>Action</th><th>Error</th><th>Time</th></tr></thead>
+        <tbody>{error_rows}</tbody>
+      </table>
+    </div>
+  </div>
+</div>"#,
+        )
+    };
+
     let content = format!(
         r#"{heading}
 {stats}
+{error_section}
 <div class="card bg-base-200 shadow">
   <div class="card-body">
     <h2 class="card-title text-lg mb-4">Recent Activity</h2>
