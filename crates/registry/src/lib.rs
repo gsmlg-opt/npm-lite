@@ -37,10 +37,13 @@ use handlers::{
     dist_tags::{delete_dist_tag, list_dist_tags, set_dist_tag},
     login::login_or_adduser,
     packument::{get_packument, get_scoped_packument},
+    ping::ping,
     publish::{publish_package, publish_scoped_package},
+    search::search,
     tarball::{get_scoped_tarball, get_tarball},
     unpublish::{unpublish_package, unpublish_version},
     version::{get_scoped_version, get_version},
+    whoami::whoami,
 };
 
 /// Build and return the full npm-registry [`Router`].
@@ -50,6 +53,14 @@ use handlers::{
 /// directly or nested inside a parent router.
 pub fn registry_router() -> Router<AppState> {
     Router::new()
+        // ── Health / discovery ────────────────────────────────────────────
+        //
+        // GET /-/ping    – liveness check
+        // GET /-/v1/search – package search
+        // GET /-/whoami  – return authenticated user's username
+        .route("/-/ping", get(ping))
+        .route("/-/v1/search", get(search))
+        .route("/-/whoami", get(whoami))
         // ── Login / user management ─────────────────────────────────────
         //
         // npm login / npm adduser

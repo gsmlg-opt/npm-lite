@@ -1,0 +1,3 @@
+registry.example.com {
+    reverse_proxy localhost:3000
+}

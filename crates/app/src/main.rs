@@ -48,6 +48,33 @@ async fn main() -> anyhow::Result<()> {
     }
     info!("database migrations applied");
 
+    // ── Seed admin user on first boot ─────────────────────────────────────
+    {
+        let admin_username =
+            std::env::var("ADMIN_USERNAME").unwrap_or_else(|_| "admin".to_string());
+        let admin_password =
+            std::env::var("ADMIN_PASSWORD").unwrap_or_else(|_| "admin".to_string());
+
+        match npm_db::UserRepo::find_by_username(&db, &admin_username).await? {
+            Some(_) => {
+                info!(username = %admin_username, "admin user already exists");
+            }
+            None => {
+                let password_hash = npm_core::auth::hash_password(&admin_password)
+                    .map_err(|e| anyhow::anyhow!("failed to hash admin password: {}", e))?;
+                npm_db::UserRepo::create(
+                    &db,
+                    &admin_username,
+                    password_hash,
+                    format!("{}@localhost", admin_username),
+                    "admin",
+                )
+                .await?;
+                info!(username = %admin_username, "admin user created");
+            }
+        }
+    }
+
     // ── Create S3 storage ──────────────────────────────────────────────────
     let storage = build_storage(&cfg).await?;
     info!(bucket = %cfg.s3_bucket, "S3 storage initialised");

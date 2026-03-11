@@ -1,7 +1,10 @@
 pub mod dist_tags;
 pub mod login;
 pub mod packument;
+pub mod ping;
 pub mod publish;
+pub mod search;
 pub mod tarball;
 pub mod unpublish;
 pub mod version;
+pub mod whoami;
