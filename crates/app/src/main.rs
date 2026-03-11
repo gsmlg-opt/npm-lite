@@ -95,7 +95,7 @@ async fn main() -> anyhow::Result<()> {
     //
     // Registry API routes at "/" and admin UI routes at "/admin".
     let app: Router = Router::new()
-        .nest("/admin", web_router().with_state(state.clone()))
+        .nest("/admin", web_router(state.clone()).with_state(state.clone()))
         .merge(registry_router().with_state(state))
         .layer(TraceLayer::new_for_http());
 
@@ -115,9 +115,6 @@ async fn main() -> anyhow::Result<()> {
 async fn build_storage(cfg: &Config) -> anyhow::Result<S3Storage> {
     use aws_config::BehaviorVersion;
     use aws_sdk_s3::{config::Region, Client};
-
-    // SAFETY: called before any multi-threaded S3 access.
-    unsafe { std::env::set_var("AWS_DEFAULT_REGION", &cfg.s3_region) };
 
     let mut sdk_builder = aws_config::defaults(BehaviorVersion::latest())
         .region(Region::new(cfg.s3_region.clone()));

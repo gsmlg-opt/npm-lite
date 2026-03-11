@@ -1,9 +1,8 @@
-//! `PUT /-/user/org.couchdb.user:{username}` – npm login / adduser endpoint.
+//! `PUT /-/user/org.couchdb.user:{username}` – npm login endpoint.
 //!
 //! The npm CLI sends a PUT request with a JSON body containing the user's
-//! credentials.  If the user already exists their password is verified and a
-//! new token is issued.  If the user is new they are created and a token is
-//! returned.
+//! credentials.  The user must already exist (created by an admin).  The
+//! password is verified and a new token is issued.
 //!
 //! Response format (npm-compatible):
 //! ```json
@@ -15,9 +14,10 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use npm_core::auth::{generate_token, hash_password, hash_token, verify_password};
-use npm_entity::{tokens, users};
+use npm_core::auth::{generate_token, hash_token, verify_password};
+use npm_entity::tokens;
 use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter};
+use npm_entity::users;
 use serde::Deserialize;
 use serde_json::json;
 use uuid::Uuid;
@@ -49,7 +49,8 @@ pub struct LoginBody {
 
 /// `PUT /-/user/org.couchdb.user:{username}`
 ///
-/// Handles both `npm login` (existing user) and `npm adduser` (new user).
+/// Authenticates an existing user and issues a new token.  Self-registration
+/// is disabled — users must be created by an admin via the admin UI.
 pub async fn login_or_adduser(
     State(state): State<AppState>,
     Path(username): Path<String>,
@@ -75,40 +76,20 @@ pub async fn login_or_adduser(
         .one(&state.db)
         .await?;
 
-    let user_id = match existing_user {
-        Some(user) => {
-            // Existing user: verify password.
-            let valid = verify_password(&body.password, &user.password_hash)
-                .map_err(|e| RegistryError::Internal(e.to_string()))?;
+    let user = existing_user.ok_or_else(|| {
+        RegistryError::Unauthorized("user not found".to_string())
+    })?;
 
-            if !valid {
-                return Err(RegistryError::Unauthorized("incorrect password".to_string()));
-            }
+    // Verify password.
+    let valid = verify_password(&body.password, &user.password_hash)
+        .map_err(|e| RegistryError::Internal(e.to_string()))?;
 
-            user.id
-        }
-        None => {
-            // New user: create account.
-            let email = body.email.unwrap_or_else(|| format!("{}@example.com", username));
+    if !valid {
+        return Err(RegistryError::Unauthorized("incorrect password".to_string()));
+    }
 
-            let password_hash = hash_password(&body.password)
-                .map_err(|e| RegistryError::Internal(e.to_string()))?;
-
-            let now = chrono::Utc::now().fixed_offset();
-            let new_user = users::ActiveModel {
-                id: Set(Uuid::new_v4()),
-                username: Set(username.clone()),
-                password_hash: Set(password_hash),
-                email: Set(email),
-                role: Set("publish".to_string()),
-                created_at: Set(now),
-                updated_at: Set(now),
-            };
-
-            let inserted = new_user.insert(&state.db).await?;
-            inserted.id
-        }
-    };
+    let user_id = user.id;
+    let user_role = user.role.clone();
 
     // Generate and store a new token.
     let raw_token = generate_token();
@@ -119,7 +100,7 @@ pub async fn login_or_adduser(
         id: Set(Uuid::new_v4()),
         user_id: Set(user_id),
         token_hash: Set(token_hash),
-        role: Set("publish".to_string()),
+        role: Set(user_role),
         name: Set(Some(format!("npm-cli-{}", token_now.timestamp()))),
         created_at: Set(token_now.fixed_offset()),
         revoked_at: Set(None),

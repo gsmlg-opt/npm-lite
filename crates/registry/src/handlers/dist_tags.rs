@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::{
-    auth::PublishUser,
+    auth::{AuthUser, PublishUser},
     error::{RegistryError, Result},
     state::AppState,
 };
@@ -29,6 +29,7 @@ use crate::{
 
 pub async fn list_dist_tags(
     State(state): State<AppState>,
+    _auth: AuthUser,
     Path(package): Path<String>,
 ) -> Result<Json<Value>> {
     let pkg = resolve_package(&state, &package).await?;

@@ -57,7 +57,10 @@ impl IntoResponse for RegistryError {
             }
             RegistryError::Internal(msg) => {
                 tracing::error!(error = %msg, "internal error");
-                (StatusCode::INTERNAL_SERVER_ERROR, msg.clone())
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "internal server error".to_string(),
+                )
             }
         };
 

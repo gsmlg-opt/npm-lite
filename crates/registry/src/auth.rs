@@ -3,8 +3,8 @@
 //! - [`AuthUser`] – Axum extractor that validates a Bearer token from the
 //!   `Authorization` header, looks it up in the database, and resolves the
 //!   associated user and role.
-//! - [`RequireRole`] – thin wrapper around `AuthUser` that additionally
-//!   enforces a minimum required [`Role`].
+//! - [`AdminUser`] / [`PublishUser`] – convenience extractors that additionally
+//!   enforce a minimum required role.
 
 use axum::{
     extract::{FromRef, FromRequestParts},
@@ -147,42 +147,8 @@ where
 }
 
 // ---------------------------------------------------------------------------
-// RequireRole
+// Role-specific extractors
 // ---------------------------------------------------------------------------
-
-/// An extractor that succeeds only when the authenticated user's effective role
-/// is at least `required`.
-///
-/// ```rust,ignore
-/// async fn my_handler(RequireRole(Role::Publish, user): RequireRole) { ... }
-/// ```
-pub struct RequireRole(pub AuthUser);
-
-impl RequireRole {
-    pub fn user(&self) -> &AuthUser {
-        &self.0
-    }
-}
-
-/// Helper struct used as an extractor; carries the minimum required role.
-///
-/// Usage: `RequireRoleExtractor<{ ROLE_PUBLISH }>` – but since const generics
-/// over enums are unstable we instead provide a macro or concrete type aliases.
-/// Here we expose a single `RequireRole` newtype and a separate
-/// `RequireMinRole` extractor that stores the required role at runtime.
-pub struct RequireMinRole {
-    pub user: AuthUser,
-}
-
-/// Extractor that enforces a minimum role passed as a query-time value.
-///
-/// In practice, handlers use `AuthUser` directly and call `user.has_role(…)`,
-/// but this extractor is available for routes that want to guard the entire
-/// handler at the extractor level.
-pub struct RoleGuard {
-    pub user: AuthUser,
-    pub required: Role,
-}
 
 /// Convenience: extract and assert Role::Admin.
 pub struct AdminUser(pub AuthUser);

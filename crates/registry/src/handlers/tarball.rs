@@ -86,13 +86,23 @@ async fn do_stream(
         .header(header::CONTENT_TYPE, "application/octet-stream")
         .header(
             header::CONTENT_DISPOSITION,
-            format!("attachment; filename=\"{}\"", filename),
+            format!(
+                "attachment; filename=\"{}\"",
+                sanitize_filename(filename)
+            ),
         )
         .header(header::CONTENT_LENGTH, size.to_string())
         .body(body)
         .map_err(|e| RegistryError::Internal(e.to_string()))?;
 
     Ok(response)
+}
+
+/// Strip characters that could be used for header injection or path traversal.
+fn sanitize_filename(name: &str) -> String {
+    name.chars()
+        .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '@'))
+        .collect()
 }
 
 fn version_from_filename(package_name: &str, filename: &str) -> Option<String> {

@@ -17,6 +17,7 @@ use axum::{
 use npm_entity::{package_versions, packages, publish_events};
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, ModelTrait, QueryFilter,
+    TransactionTrait,
 };
 use serde_json::json;
 use uuid::Uuid;
@@ -99,6 +100,8 @@ pub async fn unpublish_version(
 }
 
 /// `DELETE /-/admin/package/{package}` – soft-delete all versions of a package.
+///
+/// All soft-deletes and event records are wrapped in a single transaction.
 pub async fn unpublish_package(
     State(state): State<AppState>,
     AdminUser(admin): AdminUser,
@@ -125,7 +128,9 @@ pub async fn unpublish_package(
     }
 
     let now = chrono::Utc::now().fixed_offset();
-    let mut unpublished_count = 0u32;
+    let unpublished_count = versions.len() as u32;
+
+    let txn = state.db.begin().await?;
 
     for ver in versions {
         let version_id = ver.id;
@@ -134,7 +139,7 @@ pub async fn unpublish_package(
         // Soft-delete.
         let mut active: package_versions::ActiveModel = ver.into();
         active.deleted_at = Set(Some(now));
-        active.update(&state.db).await?;
+        active.update(&txn).await?;
 
         // Record event.
         let event = publish_events::ActiveModel {
@@ -147,7 +152,7 @@ pub async fn unpublish_package(
             error_message: Set(None),
             created_at: Set(now),
         };
-        event.insert(&state.db).await?;
+        event.insert(&txn).await?;
 
         tracing::info!(
             package = %package,
@@ -155,9 +160,9 @@ pub async fn unpublish_package(
             admin = %admin.username,
             "version soft-deleted as part of full package unpublish",
         );
-
-        unpublished_count += 1;
     }
+
+    txn.commit().await?;
 
     Ok((
         StatusCode::OK,
