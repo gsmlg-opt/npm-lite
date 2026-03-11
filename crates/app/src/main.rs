@@ -41,6 +41,13 @@ async fn main() -> anyhow::Result<()> {
     let db = Database::connect(&cfg.database_url).await?;
     info!("connected to database");
 
+    // ── Run database migrations ────────────────────────────────────────────
+    {
+        use npm_migration::MigratorTrait;
+        npm_migration::Migrator::up(&db, None).await?;
+    }
+    info!("database migrations applied");
+
     // ── Create S3 storage ──────────────────────────────────────────────────
     let storage = build_storage(&cfg).await?;
     info!(bucket = %cfg.s3_bucket, "S3 storage initialised");

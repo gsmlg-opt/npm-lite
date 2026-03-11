@@ -9,6 +9,7 @@ path = "src/main.rs"
 
 [dependencies]
 npm-core = { workspace = true }
+npm-migration = { workspace = true }
 npm-db = { workspace = true }
 npm-storage = { workspace = true }
 npm-registry = { workspace = true }

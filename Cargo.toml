@@ -8,6 +8,7 @@ members = [
     "crates/registry",
     "crates/web",
     "crates/app",
+    "crates/migration",
 ]
 
 [workspace.package]
@@ -65,3 +66,4 @@ npm-db = { path = "crates/db" }
 npm-storage = { path = "crates/storage" }
 npm-registry = { path = "crates/registry" }
 npm-web = { path = "crates/web" }
+npm-migration = { path = "crates/migration" }

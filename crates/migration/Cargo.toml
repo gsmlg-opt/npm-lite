@@ -1,0 +1,8 @@
+[package]
+name = "npm-migration"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+sea-orm-migration = { workspace = true }
+uuid = { workspace = true }
