@@ -1,4 +1,5 @@
 pub mod error;
+pub mod middleware;
 pub mod pages;
 pub mod state;
 pub mod templates;
@@ -6,6 +7,7 @@ pub mod templates;
 pub use state::AppState;
 
 use axum::{
+    middleware::from_fn,
     routing::{get, post},
     Router,
 };
@@ -24,7 +26,7 @@ use pages::{
 /// All routes are mounted relative to the prefix where this router is nested
 /// (typically `/admin`). Callers should merge or nest this router at `/admin`.
 pub fn web_router() -> Router<AppState> {
-    Router::new()
+    let protected = Router::new()
         // Dashboard
         .route("/", get(dashboard_page))
         // Packages
@@ -43,7 +45,12 @@ pub fn web_router() -> Router<AppState> {
         )
         // Activity log
         .route("/activity", get(activity_page))
+        .layer(from_fn(middleware::require_admin_session));
+
+    let public = Router::new()
         // Auth
         .route("/login", get(login_page).post(login_post))
-        .route("/logout", post(logout))
+        .route("/logout", post(logout));
+
+    protected.merge(public)
 }
