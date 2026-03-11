@@ -49,7 +49,7 @@ async fn run_gc_cycle(state: &AppState) {
 
     info!(known_keys = known_keys.len(), "GC: collected known S3 keys");
 
-    let gc = OrphanGc::new(&state.storage).with_prefix("tarballs/");
+    let gc = OrphanGc::new(&state.storage).with_prefix("packages/");
 
     match gc.cleanup_orphans(&known_keys).await {
         Ok(report) => {

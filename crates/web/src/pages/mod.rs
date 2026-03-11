@@ -1,3 +1,4 @@
+pub mod access;
 pub mod activity;
 pub mod dashboard;
 pub mod login;

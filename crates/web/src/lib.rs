@@ -13,10 +13,11 @@ use axum::{
 };
 
 use pages::{
+    access::{access_grant, access_page, access_revoke},
     activity::activity_page,
     dashboard::dashboard_page,
     login::{login_page, login_post, logout},
-    packages::{package_detail_page, package_list_page},
+    packages::{dist_tag_delete, dist_tag_set, package_detail_page, package_list_page, version_unpublish},
     teams::{team_add_member, team_create, team_detail_page, team_list_page, team_remove_member},
     settings::settings_page,
     tokens::{token_create, token_list_page, token_revoke},
@@ -34,6 +35,9 @@ pub fn web_router(state: AppState) -> Router<AppState> {
         // Packages
         .route("/packages", get(package_list_page))
         .route("/packages/{name}", get(package_detail_page))
+        .route("/packages/{name}/versions/{version}/unpublish", post(version_unpublish))
+        .route("/packages/{name}/dist-tags", post(dist_tag_set))
+        .route("/packages/{name}/dist-tags/{tag}/delete", post(dist_tag_delete))
         // Tokens
         .route("/tokens", get(token_list_page).post(token_create))
         .route("/tokens/{id}/revoke", post(token_revoke))
@@ -45,6 +49,9 @@ pub fn web_router(state: AppState) -> Router<AppState> {
             "/teams/{team_id}/members/{member_id}/remove",
             post(team_remove_member),
         )
+        // Access Control
+        .route("/access", get(access_page).post(access_grant))
+        .route("/access/{id}/revoke", post(access_revoke))
         // Users
         .route("/users", get(user_list_page).post(user_create))
         // Settings

@@ -310,6 +310,19 @@ async fn persist_publish(
                 updated_at: Set(now),
             };
             let inserted = new_pkg.insert(&txn).await?;
+
+            // Grant the publishing user admin permission on the new package.
+            let acl_entry = npm_entity::package_acl::ActiveModel {
+                id: Set(Uuid::new_v4()),
+                package_id: Set(Some(inserted.id)),
+                scope: Set(None),
+                user_id: Set(Some(*actor_id)),
+                team_id: Set(None),
+                permission: Set("admin".to_string()),
+                created_at: Set(now),
+            };
+            acl_entry.insert(&txn).await?;
+
             (inserted.id, true)
         }
     };
