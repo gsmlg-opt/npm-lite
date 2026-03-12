@@ -6,8 +6,8 @@
 use chrono::Utc;
 use npm_entity::upstream_cache;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter,
-    Set,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, Order, PaginatorTrait,
+    QueryFilter, QueryOrder, QuerySelect, Set,
 };
 use serde_json::Value;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -145,6 +145,45 @@ pub async fn count_cached_packuments(
     db: &DatabaseConnection,
 ) -> Result<u64, sea_orm::DbErr> {
     upstream_cache::Entity::find().count(db).await
+}
+
+/// Evict the oldest cached packuments to keep the cache within `max_entries`.
+///
+/// Deletes entries by oldest `fetched_at` first. Returns the number of entries evicted.
+pub async fn evict_oldest_cached_packuments(
+    db: &DatabaseConnection,
+    max_entries: u64,
+) -> Result<u64, sea_orm::DbErr> {
+    let current_count = count_cached_packuments(db).await?;
+    if current_count <= max_entries {
+        return Ok(0);
+    }
+
+    let to_evict = current_count - max_entries;
+
+    // Find the oldest entries to delete.
+    let oldest = upstream_cache::Entity::find()
+        .order_by(upstream_cache::Column::FetchedAt, Order::Asc)
+        .limit(to_evict)
+        .all(db)
+        .await?;
+
+    let mut evicted = 0u64;
+    for entry in oldest {
+        if upstream_cache::Entity::delete_by_id(entry.id)
+            .exec(db)
+            .await
+            .is_ok()
+        {
+            evicted += 1;
+        }
+    }
+
+    if evicted > 0 {
+        debug!(evicted, max_entries, "evicted oldest cached packuments");
+    }
+
+    Ok(evicted)
 }
 
 /// Build the S3 key for a cached upstream tarball.

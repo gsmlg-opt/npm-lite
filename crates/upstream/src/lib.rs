@@ -14,10 +14,13 @@ pub mod health;
 pub mod integrity;
 pub mod proxy;
 pub mod router;
+pub mod warmup;
+pub mod webhook;
 
 pub use cache::{
     CacheStats, cache_stats, count_cached_packuments, delete_all_cached_packuments,
-    delete_cached_packument, get_cached_packument, put_cached_packument, upstream_tarball_s3_key,
+    delete_cached_packument, evict_oldest_cached_packuments, get_cached_packument,
+    put_cached_packument, upstream_tarball_s3_key,
 };
 pub use client::UpstreamClient;
 pub use config::UpstreamConfig;

@@ -119,6 +119,27 @@ async fn main() -> anyhow::Result<()> {
     // ── Spawn background GC task ───────────────────────────────────────────
     spawn_gc_task(state.clone(), cfg.gc_interval_secs);
 
+    // ── Spawn cache warmup task (if enabled) ─────────────────────────────
+    if let Some(ref upstream_client) = state.upstream {
+        let warmup_enabled = std::env::var("UPSTREAM_CACHE_WARMUP")
+            .ok()
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(false);
+        if warmup_enabled && upstream_client.config().cache_enabled {
+            let warmup_interval_secs: u64 = std::env::var("UPSTREAM_CACHE_WARMUP_INTERVAL_SECS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(120);
+            npm_upstream::warmup::spawn_warmup_task(
+                state.db.clone(),
+                upstream_client.clone(),
+                upstream_client.config().cache_ttl,
+                std::time::Duration::from_secs(warmup_interval_secs),
+            );
+            info!(interval_secs = warmup_interval_secs, "cache warmup task enabled");
+        }
+    }
+
     // ── Compose the application router ────────────────────────────────────
     //
     // Registry API routes at "/" and admin UI routes at "/admin".

@@ -70,7 +70,10 @@ pub fn web_router(state: AppState) -> Router<AppState> {
         .route("/upstream", get(upstream_page))
         .route("/upstream/purge-cache", post(purge_cache))
         // Upstream API
-        .route("/api/upstream/config", get(upstream_api::get_config))
+        .route(
+            "/api/upstream/config",
+            get(upstream_api::get_config).put(upstream_api::update_config),
+        )
         .route(
             "/api/upstream/rules",
             get(upstream_api::list_rules).post(upstream_api::create_rule),

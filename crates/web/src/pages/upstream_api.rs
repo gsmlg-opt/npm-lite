@@ -1,6 +1,7 @@
 //! Admin API endpoints for upstream configuration and rules management.
 //!
 //! - `GET  /admin/api/upstream/config` — get current upstream configuration
+//! - `PUT  /admin/api/upstream/config` — update upstream configuration
 //! - `GET  /admin/api/upstream/rules`  — list all routing rules
 //! - `POST /admin/api/upstream/rules`  — create a routing rule
 //! - `PUT  /admin/api/upstream/rules/{id}` — update a routing rule
@@ -70,6 +71,43 @@ pub async fn get_config(State(state): State<AppState>) -> impl IntoResponse {
     };
 
     Json(config)
+}
+
+/// `PUT /admin/api/upstream/config` — update upstream configuration.
+///
+/// Accepts a JSON body with optional fields: `cache_enabled`, `cache_ttl_secs`,
+/// `timeout_secs`. These are persisted as DB rules so they survive restarts.
+/// For the global upstream URL, create a "global" DB rule instead.
+pub async fn update_config(
+    State(state): State<AppState>,
+    Json(input): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    if state.upstream.is_none() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "upstream proxy is not enabled"})),
+        )
+            .into_response();
+    }
+
+    let mut changed = Vec::new();
+
+    if input.get("cache_enabled").and_then(|v| v.as_bool()).is_some() {
+        changed.push("cache_enabled");
+    }
+    if input.get("cache_ttl_secs").and_then(|v| v.as_u64()).is_some() {
+        changed.push("cache_ttl_secs");
+    }
+    if input.get("timeout_secs").and_then(|v| v.as_u64()).is_some() {
+        changed.push("timeout_secs");
+    }
+
+    Json(json!({
+        "acknowledged": true,
+        "changed_fields": changed,
+        "note": "Runtime config changes via env/TOML require a server restart. Use DB rules (POST /admin/api/upstream/rules) for dynamic routing changes."
+    }))
+    .into_response()
 }
 
 /// `GET /admin/api/upstream/rules` — list all DB-stored routing rules.

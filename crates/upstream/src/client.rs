@@ -125,11 +125,11 @@ impl UpstreamClient {
             Ok(resp) => resp,
             Err(e) => {
                 self.circuit_breaker.record_failure(upstream_url);
-                return Err(if e.is_timeout() {
-                    UpstreamError::Timeout(url)
-                } else {
-                    UpstreamError::Request(e)
-                });
+                if e.is_timeout() {
+                    crate::webhook::notify_timeout(upstream_url);
+                    return Err(UpstreamError::Timeout(url));
+                }
+                return Err(UpstreamError::Request(e));
             }
         };
 
@@ -141,6 +141,7 @@ impl UpstreamClient {
             404 => return Err(UpstreamError::NotFound(package_name.to_string())),
             s if s >= 500 => {
                 self.circuit_breaker.record_failure(upstream_url);
+                crate::webhook::notify_upstream_error(upstream_url, s);
                 return Err(UpstreamError::UpstreamServerError {
                     status: s,
                     url,

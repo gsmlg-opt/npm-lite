@@ -107,6 +107,7 @@ impl CircuitBreaker {
                 cooldown_secs = self.cooldown.as_secs(),
                 "circuit breaker opened (upstream unhealthy)"
             );
+            crate::webhook::notify_circuit_open(normalized);
         }
     }
 

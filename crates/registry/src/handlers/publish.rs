@@ -347,6 +347,8 @@ async fn persist_publish(
         integrity: Set(hashes.integrity.clone()),
         size: Set(size),
         metadata: Set(version_meta.clone()),
+        source: Set("local".to_string()),
+        upstream_url: Set(None),
         deleted_at: Set(None),
         created_at: Set(chrono::Utc::now().fixed_offset()),
     };

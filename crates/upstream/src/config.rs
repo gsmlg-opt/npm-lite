@@ -34,6 +34,9 @@ pub struct UpstreamConfig {
     /// Auth token references keyed by upstream URL.
     /// Values are `env:VAR_NAME` references or inline tokens.
     pub auth_token_refs: HashMap<String, String>,
+
+    /// Maximum number of cached packument entries. 0 = unlimited.
+    pub cache_max_entries: u64,
 }
 
 /// A regex-based routing rule.
@@ -94,6 +97,11 @@ impl UpstreamConfig {
             .and_then(|v| v.parse().ok())
             .unwrap_or(300);
 
+        let cache_max_entries: u64 = env::var("UPSTREAM_CACHE_MAX_ENTRIES")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
+
         let mut config = Self {
             upstream_url,
             timeout: Duration::from_secs(timeout_secs),
@@ -103,6 +111,7 @@ impl UpstreamConfig {
             local_scopes: Vec::new(),
             pattern_rules: Vec::new(),
             auth_token_refs: HashMap::new(),
+            cache_max_entries,
         };
 
         // Overlay TOML config if path is specified.
@@ -213,6 +222,7 @@ mod tests {
             local_scopes: Vec::new(),
             pattern_rules: Vec::new(),
             auth_token_refs: HashMap::new(),
+            cache_max_entries: 0,
         };
         assert!(!config.is_enabled());
     }
@@ -228,6 +238,7 @@ mod tests {
             local_scopes: Vec::new(),
             pattern_rules: Vec::new(),
             auth_token_refs: HashMap::new(),
+            cache_max_entries: 0,
         };
         assert!(config.is_enabled());
     }
@@ -243,6 +254,7 @@ mod tests {
             local_scopes: Vec::new(),
             pattern_rules: Vec::new(),
             auth_token_refs: HashMap::new(),
+            cache_max_entries: 0,
         };
         assert_eq!(config.timeout, Duration::from_secs(30));
     }
@@ -258,6 +270,7 @@ mod tests {
             local_scopes: Vec::new(),
             pattern_rules: Vec::new(),
             auth_token_refs: HashMap::new(),
+            cache_max_entries: 0,
         };
 
         let toml_str = r#"
@@ -300,6 +313,7 @@ mod tests {
             local_scopes: Vec::new(),
             pattern_rules: Vec::new(),
             auth_token_refs: HashMap::new(),
+            cache_max_entries: 0,
         };
 
         let toml_str = r#"
@@ -328,6 +342,7 @@ mod tests {
             local_scopes: Vec::new(),
             pattern_rules: Vec::new(),
             auth_token_refs: HashMap::new(),
+            cache_max_entries: 0,
         };
 
         let toml_str = r#"

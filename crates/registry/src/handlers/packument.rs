@@ -207,6 +207,15 @@ async fn fetch_upstream_packument(
                     &packument,
                 )
                 .await;
+
+                // Evict oldest entries if cache exceeds max size.
+                if config.cache_max_entries > 0 {
+                    let _ = npm_upstream::evict_oldest_cached_packuments(
+                        &state.db,
+                        config.cache_max_entries,
+                    )
+                    .await;
+                }
             }
 
             // Rewrite tarball URLs so the client fetches tarballs through this registry.
@@ -274,6 +283,14 @@ async fn try_fetch_upstream_for_merge(
                     &packument,
                 )
                 .await;
+
+                if config.cache_max_entries > 0 {
+                    let _ = npm_upstream::evict_oldest_cached_packuments(
+                        &state.db,
+                        config.cache_max_entries,
+                    )
+                    .await;
+                }
             }
             Some(packument)
         }

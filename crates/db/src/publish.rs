@@ -145,6 +145,8 @@ pub async fn execute_publish(
                     integrity: Set(integrity),
                     size: Set(size),
                     metadata: Set(metadata),
+                    source: Set("local".to_string()),
+                    upstream_url: Set(None),
                     deleted_at: Set(None),
                     created_at: Set(now),
                 };

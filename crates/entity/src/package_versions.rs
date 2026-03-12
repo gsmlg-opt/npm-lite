@@ -18,6 +18,11 @@ pub struct Model {
     pub size: i64,
     /// Full package.json metadata stored as JSON
     pub metadata: Json,
+    /// Package source: "local" or "upstream".
+    #[sea_orm(default_value = "local")]
+    pub source: String,
+    /// Origin upstream URL for cached/proxied versions (null for local).
+    pub upstream_url: Option<String>,
     pub deleted_at: Option<DateTimeWithTimeZone>,
     pub created_at: DateTimeWithTimeZone,
 }
