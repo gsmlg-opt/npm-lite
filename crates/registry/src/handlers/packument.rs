@@ -167,7 +167,8 @@ pub(crate) fn upstream_error_to_registry(
             RegistryError::BadGateway("upstream server error".to_string())
         }
         npm_upstream::UpstreamError::InvalidResponse(msg) => {
-            RegistryError::BadGateway(format!("invalid upstream response: {}", msg))
+            tracing::error!(error = %msg, "invalid upstream response");
+            RegistryError::BadGateway("invalid upstream response".to_string())
         }
         other => {
             tracing::error!(error = %other, "upstream proxy error");
