@@ -1,0 +1,167 @@
+name: E2E Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    name: End-to-End
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: npm
+          POSTGRES_PASSWORD: npm
+          POSTGRES_DB: npm_registry
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U npm"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      minio:
+        image: minio/minio
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
+        ports:
+          - 9000:9000
+        options: >-
+          --health-cmd "mc ready local || curl -sf http://localhost:9000/minio/health/live"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        # minio/minio default entrypoint handles `server /data`
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create S3 bucket
+        run: |
+          curl -sf https://dl.min.io/client/mc/release/linux-amd64/mc -o /usr/local/bin/mc
+          chmod +x /usr/local/bin/mc
+          mc alias set myminio http://localhost:9000 minioadmin minioadmin
+          mc mb myminio/npm-registry --ignore-existing
+
+      - name: Build Docker image
+        run: docker build -t npm-lite:e2e .
+
+      - name: Start registry
+        run: |
+          docker run -d --name npm-registry --network host \
+            -e DATABASE_URL=postgres://npm:npm@localhost:5432/npm_registry \
+            -e S3_BUCKET=npm-registry \
+            -e S3_REGION=us-east-1 \
+            -e S3_ENDPOINT=http://localhost:9000 \
+            -e REGISTRY_URL=http://localhost:3000 \
+            -e BIND_ADDR=0.0.0.0:3000 \
+            -e GC_INTERVAL_SECS=0 \
+            -e ADMIN_USERNAME=admin \
+            -e ADMIN_PASSWORD=admin123 \
+            -e AWS_ACCESS_KEY_ID=minioadmin \
+            -e AWS_SECRET_ACCESS_KEY=minioadmin \
+            -e RUST_LOG=info \
+            npm-lite:e2e
+
+      - name: Wait for registry to be ready
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/-/ping > /dev/null 2>&1; then
+              echo "Registry is ready"
+              exit 0
+            fi
+            echo "Waiting for registry... ($i/30)"
+            sleep 2
+          done
+          echo "Registry failed to start"
+          docker logs npm-registry
+          exit 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Configure npm
+        run: |
+          npm set registry http://localhost:3000
+
+      - name: Login to registry
+        run: |
+          TOKEN=$(curl -sf -X PUT \
+            -H "Content-Type: application/json" \
+            -d '{"name":"admin","password":"admin123"}' \
+            http://localhost:3000/-/user/org.couchdb.user:admin | jq -r '.token')
+          echo "//localhost:3000/:_authToken=${TOKEN}" >> ~/.npmrc
+          npm whoami
+
+      - name: Create and publish test package
+        run: |
+          mkdir -p /tmp/test-pkg
+          cd /tmp/test-pkg
+          cat > package.json <<'PKG'
+          {
+            "name": "e2e-test-package",
+            "version": "1.0.0",
+            "description": "E2E test package",
+            "main": "index.js"
+          }
+          PKG
+          echo "module.exports = 'hello from e2e';" > index.js
+          npm publish
+
+      - name: Verify package metadata
+        run: |
+          npm view e2e-test-package version | grep "1.0.0"
+
+      - name: Publish a second version
+        run: |
+          cd /tmp/test-pkg
+          sed -i 's/1.0.0/1.1.0/' package.json
+          npm publish
+
+      - name: Verify dist-tags
+        run: |
+          npm view e2e-test-package dist-tags.latest | grep "1.1.0"
+
+      - name: Install published package
+        run: |
+          mkdir -p /tmp/test-consumer
+          cd /tmp/test-consumer
+          npm init -y
+          npm install e2e-test-package@1.0.0
+          node -e "const m = require('e2e-test-package'); if(m !== 'hello from e2e') process.exit(1)"
+          echo "Package install and require: OK"
+
+      - name: Search for package
+        run: |
+          npm search e2e-test-package --registry http://localhost:3000 || true
+
+      - name: Create and publish scoped package
+        run: |
+          mkdir -p /tmp/test-scoped
+          cd /tmp/test-scoped
+          cat > package.json <<'PKG'
+          {
+            "name": "@e2e/scoped-package",
+            "version": "0.1.0",
+            "description": "Scoped E2E test package",
+            "main": "index.js"
+          }
+          PKG
+          echo "module.exports = 'scoped';" > index.js
+          npm publish
+
+      - name: Install scoped package
+        run: |
+          cd /tmp/test-consumer
+          npm install @e2e/scoped-package@0.1.0
+          node -e "const m = require('@e2e/scoped-package'); if(m !== 'scoped') process.exit(1)"
+          echo "Scoped package install: OK"
+
+      - name: Show registry logs on failure
+        if: failure()
+        run: docker logs npm-registry
