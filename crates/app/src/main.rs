@@ -79,6 +79,19 @@ async fn main() -> anyhow::Result<()> {
     let storage = build_storage(&cfg).await?;
     info!(bucket = %cfg.s3_bucket, "S3 storage initialised");
 
+    // ── Build upstream proxy client (if configured) ─────────────────────
+    let upstream_config = npm_upstream::UpstreamConfig::from_env();
+    let upstream = if upstream_config.is_enabled() {
+        info!(
+            upstream_url = %upstream_config.upstream_url.as_deref().unwrap_or(""),
+            "upstream proxy enabled"
+        );
+        Some(npm_upstream::UpstreamClient::new(upstream_config)?)
+    } else {
+        info!("upstream proxy disabled (no UPSTREAM_URL set)");
+        None
+    };
+
     // ── Build shared application state ────────────────────────────────────
     let state = AppState {
         db,
@@ -86,6 +99,7 @@ async fn main() -> anyhow::Result<()> {
         config: RegistryConfig {
             registry_url: cfg.registry_url.clone(),
         },
+        upstream,
     };
 
     // ── Spawn background GC task ───────────────────────────────────────────

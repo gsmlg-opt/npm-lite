@@ -14,4 +14,6 @@ pub struct AppState {
     pub db: sea_orm::DatabaseConnection,
     pub storage: Arc<npm_storage::S3Storage>,
     pub config: RegistryConfig,
+    /// Optional upstream proxy client. `None` means fully local mode.
+    pub upstream: Option<npm_upstream::UpstreamClient>,
 }

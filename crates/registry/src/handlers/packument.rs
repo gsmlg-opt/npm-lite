@@ -10,6 +10,7 @@ use axum::{
 use npm_entity::{dist_tags, package_versions, packages};
 use sea_orm::{ColumnTrait, EntityTrait, ModelTrait, QueryFilter};
 use serde_json::{Value, json};
+use tracing::debug;
 
 use crate::{
     auth::AuthUser,
@@ -49,9 +50,23 @@ async fn build_packument(state: &AppState, package_name: &str) -> Result<Json<Va
     let pkg = packages::Entity::find()
         .filter(packages::Column::Name.eq(package_name))
         .one(&state.db)
-        .await?
-        .ok_or_else(|| RegistryError::NotFound(format!("package '{}' not found", package_name)))?;
+        .await?;
 
+    match pkg {
+        Some(pkg) => build_local_packument(state, package_name, pkg).await,
+        None => {
+            // Package not found locally — try upstream if configured.
+            fetch_upstream_packument(state, package_name).await
+        }
+    }
+}
+
+/// Build a packument from locally stored package data.
+async fn build_local_packument(
+    state: &AppState,
+    package_name: &str,
+    pkg: packages::Model,
+) -> Result<Json<Value>> {
     // Fetch all non-deleted versions.
     let versions: Vec<package_versions::Model> = pkg
         .find_related(package_versions::Entity)
@@ -110,6 +125,42 @@ async fn build_packument(state: &AppState, package_name: &str) -> Result<Json<Va
             "modified": pkg.updated_at.to_rfc3339(),
         },
     });
+
+    Ok(Json(packument))
+}
+
+/// Attempt to fetch a packument from the configured upstream registry.
+async fn fetch_upstream_packument(
+    state: &AppState,
+    package_name: &str,
+) -> Result<Json<Value>> {
+    let upstream = state.upstream.as_ref().ok_or_else(|| {
+        RegistryError::NotFound(format!("package '{}' not found", package_name))
+    })?;
+
+    debug!(package = %package_name, "package not found locally, trying upstream");
+
+    let mut packument = upstream
+        .fetch_packument(package_name)
+        .await
+        .map_err(|e| match e {
+            npm_upstream::UpstreamError::NotFound(_) => {
+                RegistryError::NotFound(format!("package '{}' not found", package_name))
+            }
+            npm_upstream::UpstreamError::Timeout(_) => {
+                RegistryError::Internal("upstream request timed out".to_string())
+            }
+            npm_upstream::UpstreamError::UpstreamServerError { status, .. } if status >= 500 => {
+                RegistryError::Internal("upstream server error".to_string())
+            }
+            other => {
+                tracing::error!(error = %other, "upstream proxy error");
+                RegistryError::Internal("upstream proxy error".to_string())
+            }
+        })?;
+
+    // Rewrite tarball URLs so the client fetches tarballs through this registry.
+    npm_upstream::proxy::rewrite_tarball_urls(&mut packument, &state.config.registry_url);
 
     Ok(Json(packument))
 }

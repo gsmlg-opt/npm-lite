@@ -5,6 +5,7 @@ members = [
     "crates/entity",
     "crates/db",
     "crates/storage",
+    "crates/upstream",
     "crates/registry",
     "crates/web",
     "crates/app",
@@ -58,12 +59,15 @@ semver = { version = "1", features = ["serde"] }
 bytes = "1"
 futures = "0.3"
 dotenvy = "0.15"
+reqwest = { version = "0.12", features = ["json", "stream"] }
+url = "2"
 
 # Internal crates
 npm-core = { path = "crates/core" }
 npm-entity = { path = "crates/entity" }
 npm-db = { path = "crates/db" }
 npm-storage = { path = "crates/storage" }
+npm-upstream = { path = "crates/upstream" }
 npm-registry = { path = "crates/registry" }
 npm-web = { path = "crates/web" }
 npm-migration = { path = "crates/migration" }
