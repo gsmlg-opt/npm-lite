@@ -28,6 +28,7 @@ pub async fn get_config(State(state): State<AppState>) -> impl IntoResponse {
     let config = match &state.upstream {
         Some(client) => {
             let cfg = client.config();
+            let health = client.health_status();
             json!({
                 "enabled": true,
                 "upstream_url": cfg.upstream_url,
@@ -45,6 +46,7 @@ pub async fn get_config(State(state): State<AppState>) -> impl IntoResponse {
                     "misses": cache_stats.misses,
                     "stale_hits": cache_stats.stale_hits,
                 },
+                "health": health,
             })
         }
         None => {

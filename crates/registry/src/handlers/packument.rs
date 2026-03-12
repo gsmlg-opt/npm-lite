@@ -347,6 +347,10 @@ pub(crate) fn upstream_error_to_registry(
             tracing::error!(error = %msg, "invalid upstream response");
             RegistryError::BadGateway("invalid upstream response".to_string())
         }
+        npm_upstream::UpstreamError::CircuitOpen(url) => {
+            tracing::warn!(upstream = %url, "circuit breaker open, upstream unavailable");
+            RegistryError::BadGateway("upstream temporarily unavailable".to_string())
+        }
         other => {
             tracing::error!(error = %other, "upstream proxy error");
             RegistryError::BadGateway("upstream proxy error".to_string())

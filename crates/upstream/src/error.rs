@@ -27,4 +27,8 @@ pub enum UpstreamError {
     /// No upstream is configured.
     #[error("no upstream configured")]
     NoUpstream,
+
+    /// Circuit breaker is open for this upstream (too many recent failures).
+    #[error("upstream circuit open (unhealthy): {0}")]
+    CircuitOpen(String),
 }

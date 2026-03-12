@@ -10,6 +10,7 @@ pub mod client;
 pub mod config;
 pub mod db_rules;
 pub mod error;
+pub mod health;
 pub mod integrity;
 pub mod proxy;
 pub mod router;
@@ -25,5 +26,6 @@ pub use db_rules::{
     update_rule,
 };
 pub use error::UpstreamError;
+pub use health::{CircuitBreaker, UpstreamHealth};
 pub use integrity::verify_tarball_integrity;
 pub use router::{RouteTarget, resolve as resolve_upstream};

@@ -33,6 +33,7 @@ pub async fn upstream_page(State(state): State<AppState>) -> WebResult<Html<Stri
         scope_rules,
         local_scopes,
         pattern_rules,
+        health_statuses,
     ) = match upstream {
         Some(client) => {
             let cfg = client.config();
@@ -47,6 +48,7 @@ pub async fn upstream_page(State(state): State<AppState>) -> WebResult<Html<Stri
                 cfg.scope_rules.clone(),
                 cfg.local_scopes.clone(),
                 cfg.pattern_rules.clone(),
+                client.health_status(),
             )
         }
         None => (
@@ -55,6 +57,7 @@ pub async fn upstream_page(State(state): State<AppState>) -> WebResult<Html<Stri
             false,
             300u64,
             std::collections::HashMap::new(),
+            Vec::new(),
             Vec::new(),
             Vec::new(),
         ),
@@ -167,6 +170,34 @@ pub async fn upstream_page(State(state): State<AppState>) -> WebResult<Html<Stri
         rows
     };
 
+    let health_section = if health_statuses.is_empty() {
+        r#"<p class="text-sm opacity-50">No upstream requests tracked yet.</p>"#.to_string()
+    } else {
+        let mut rows = String::new();
+        for h in &health_statuses {
+            let status_badge = if h.status == "open" {
+                r#"<span class="badge badge-error">open (unhealthy)</span>"#
+            } else {
+                r#"<span class="badge badge-success">closed (healthy)</span>"#
+            };
+            let last_fail = h
+                .last_failure_secs_ago
+                .map(|s| format!("{}s ago", s))
+                .unwrap_or_else(|| "-".to_string());
+            rows.push_str(&format!(
+                r#"<tr><td class="font-mono text-sm">{url}</td><td>{status}</td><td>{failures}</td><td>{last_fail}</td></tr>"#,
+                url = html_escape(&h.url),
+                status = status_badge,
+                failures = h.consecutive_failures,
+                last_fail = last_fail,
+            ));
+        }
+        format!(
+            r#"<div class="overflow-x-auto"><table class="table"><thead><tr><th>Upstream</th><th>Circuit</th><th>Consecutive Failures</th><th>Last Failure</th></tr></thead><tbody>{rows}</tbody></table></div>"#,
+            rows = rows,
+        )
+    };
+
     let content = format!(
         r#"{heading}
 
@@ -208,6 +239,14 @@ pub async fn upstream_page(State(state): State<AppState>) -> WebResult<Html<Stri
         </div>
       </div>
       {purge_form}
+    </div>
+  </div>
+
+  <!-- Upstream Health -->
+  <div class="card bg-base-200 shadow md:col-span-2">
+    <div class="card-body">
+      <h2 class="card-title text-lg">Upstream Health (Circuit Breaker)</h2>
+      {health_section}
     </div>
   </div>
 
@@ -404,6 +443,7 @@ document.getElementById('add-rule-form').addEventListener('submit', async functi
         } else {
             ""
         },
+        health_section = health_section,
         scope_rows = scope_rows,
         pattern_rows = pattern_rows,
         db_rules_rows = db_rules_rows,

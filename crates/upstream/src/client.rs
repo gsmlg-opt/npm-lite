@@ -9,6 +9,7 @@ use tracing::{debug, warn};
 
 use crate::config::UpstreamConfig;
 use crate::error::UpstreamError;
+use crate::health::CircuitBreaker;
 
 /// HTTP client wrapper for talking to upstream npm registries.
 #[derive(Clone)]
@@ -18,6 +19,8 @@ pub struct UpstreamClient {
     /// Auth tokens resolved for specific upstream URLs.
     /// Map of upstream URL → bearer token.
     auth_tokens: HashMap<String, String>,
+    /// Circuit breaker for upstream health tracking.
+    circuit_breaker: CircuitBreaker,
 }
 
 impl UpstreamClient {
@@ -33,10 +36,14 @@ impl UpstreamClient {
         // Pre-resolve auth tokens from scope_auth_tokens config.
         let auth_tokens = config.resolve_auth_tokens();
 
+        // Create circuit breaker: open after 5 consecutive failures, cooldown 60s.
+        let circuit_breaker = CircuitBreaker::new(5, 60);
+
         Ok(Self {
             client,
             config,
             auth_tokens,
+            circuit_breaker,
         })
     }
 
@@ -53,6 +60,11 @@ impl UpstreamClient {
     /// Update auth tokens (e.g. after loading DB rules).
     pub fn refresh_auth_tokens(&mut self) {
         self.auth_tokens = self.config.resolve_auth_tokens();
+    }
+
+    /// Get health status for all tracked upstreams.
+    pub fn health_status(&self) -> Vec<crate::health::UpstreamHealth> {
+        self.circuit_breaker.health_status()
     }
 
     /// Returns the configured global upstream URL, or `Err(NoUpstream)` if none.
@@ -86,6 +98,11 @@ impl UpstreamClient {
         package_name: &str,
         upstream_url: &str,
     ) -> Result<serde_json::Value, UpstreamError> {
+        // Circuit breaker check.
+        if !self.circuit_breaker.is_healthy(upstream_url) {
+            return Err(UpstreamError::CircuitOpen(upstream_url.to_string()));
+        }
+
         let url = format!(
             "{}/{}",
             upstream_url.trim_end_matches('/'),
@@ -104,22 +121,26 @@ impl UpstreamClient {
             req = req.bearer_auth(token);
         }
 
-        let resp = req
-            .send()
-            .await
-            .map_err(|e| {
-                if e.is_timeout() {
-                    UpstreamError::Timeout(url.clone())
+        let resp = match req.send().await {
+            Ok(resp) => resp,
+            Err(e) => {
+                self.circuit_breaker.record_failure(upstream_url);
+                return Err(if e.is_timeout() {
+                    UpstreamError::Timeout(url)
                 } else {
                     UpstreamError::Request(e)
-                }
-            })?;
+                });
+            }
+        };
 
         let status = resp.status().as_u16();
         match status {
-            200 => {}
+            200 => {
+                self.circuit_breaker.record_success(upstream_url);
+            }
             404 => return Err(UpstreamError::NotFound(package_name.to_string())),
             s if s >= 500 => {
+                self.circuit_breaker.record_failure(upstream_url);
                 return Err(UpstreamError::UpstreamServerError {
                     status: s,
                     url,
@@ -160,34 +181,53 @@ impl UpstreamClient {
         ),
         UpstreamError,
     > {
+        // Derive the upstream base URL from the tarball URL for circuit breaker and auth.
+        let upstream_base = url::Url::parse(tarball_url)
+            .ok()
+            .map(|p| format!("{}://{}", p.scheme(), p.host_str().unwrap_or("")));
+
+        if let Some(base) = &upstream_base
+            && !self.circuit_breaker.is_healthy(base)
+        {
+            return Err(UpstreamError::CircuitOpen(base.clone()));
+        }
+
         debug!(url = %tarball_url, "streaming tarball from upstream");
 
         let mut req = self.client.get(tarball_url);
 
-        // Derive the upstream base URL from the tarball URL for auth lookup.
-        if let Ok(parsed) = url::Url::parse(tarball_url) {
-            let base = format!("{}://{}", parsed.scheme(), parsed.host_str().unwrap_or(""));
-            if let Some(token) = self.auth_token_for(&base) {
-                req = req.bearer_auth(token);
-            }
+        if let Some(base) = &upstream_base
+            && let Some(token) = self.auth_token_for(base)
+        {
+            req = req.bearer_auth(token);
         }
 
-        let resp = req
-            .send()
-            .await
-            .map_err(|e| {
-                if e.is_timeout() {
+        let resp = match req.send().await {
+            Ok(resp) => resp,
+            Err(e) => {
+                if let Some(base) = &upstream_base {
+                    self.circuit_breaker.record_failure(base);
+                }
+                return Err(if e.is_timeout() {
                     UpstreamError::Timeout(tarball_url.to_string())
                 } else {
                     UpstreamError::Request(e)
-                }
-            })?;
+                });
+            }
+        };
 
         let status = resp.status().as_u16();
         match status {
-            200 => {}
+            200 => {
+                if let Some(base) = &upstream_base {
+                    self.circuit_breaker.record_success(base);
+                }
+            }
             404 => return Err(UpstreamError::NotFound(tarball_url.to_string())),
             s if s >= 500 => {
+                if let Some(base) = &upstream_base {
+                    self.circuit_breaker.record_failure(base);
+                }
                 return Err(UpstreamError::UpstreamServerError {
                     status: s,
                     url: tarball_url.to_string(),
@@ -212,33 +252,52 @@ impl UpstreamClient {
         &self,
         tarball_url: &str,
     ) -> Result<Bytes, UpstreamError> {
+        let upstream_base = url::Url::parse(tarball_url)
+            .ok()
+            .map(|p| format!("{}://{}", p.scheme(), p.host_str().unwrap_or("")));
+
+        if let Some(base) = &upstream_base
+            && !self.circuit_breaker.is_healthy(base)
+        {
+            return Err(UpstreamError::CircuitOpen(base.clone()));
+        }
+
         debug!(url = %tarball_url, "downloading tarball from upstream for caching");
 
         let mut req = self.client.get(tarball_url);
 
-        if let Ok(parsed) = url::Url::parse(tarball_url) {
-            let base = format!("{}://{}", parsed.scheme(), parsed.host_str().unwrap_or(""));
-            if let Some(token) = self.auth_token_for(&base) {
-                req = req.bearer_auth(token);
-            }
+        if let Some(base) = &upstream_base
+            && let Some(token) = self.auth_token_for(base)
+        {
+            req = req.bearer_auth(token);
         }
 
-        let resp = req
-            .send()
-            .await
-            .map_err(|e| {
-                if e.is_timeout() {
+        let resp = match req.send().await {
+            Ok(resp) => resp,
+            Err(e) => {
+                if let Some(base) = &upstream_base {
+                    self.circuit_breaker.record_failure(base);
+                }
+                return Err(if e.is_timeout() {
                     UpstreamError::Timeout(tarball_url.to_string())
                 } else {
                     UpstreamError::Request(e)
-                }
-            })?;
+                });
+            }
+        };
 
         let status = resp.status().as_u16();
         match status {
-            200 => {}
+            200 => {
+                if let Some(base) = &upstream_base {
+                    self.circuit_breaker.record_success(base);
+                }
+            }
             404 => return Err(UpstreamError::NotFound(tarball_url.to_string())),
             s if s >= 500 => {
+                if let Some(base) = &upstream_base {
+                    self.circuit_breaker.record_failure(base);
+                }
                 return Err(UpstreamError::UpstreamServerError {
                     status: s,
                     url: tarball_url.to_string(),
