@@ -23,6 +23,7 @@ use pages::{
     settings::settings_page,
     teams::{team_add_member, team_create, team_detail_page, team_list_page, team_remove_member},
     tokens::{token_create, token_list_page, token_revoke},
+    upstream::{purge_cache, upstream_page},
     users::{user_create, user_list_page},
 };
 
@@ -64,6 +65,9 @@ pub fn web_router(state: AppState) -> Router<AppState> {
         .route("/users", get(user_list_page).post(user_create))
         // Settings
         .route("/settings", get(settings_page))
+        // Upstream
+        .route("/upstream", get(upstream_page))
+        .route("/upstream/purge-cache", post(purge_cache))
         // Activity log
         .route("/activity", get(activity_page))
         .layer(from_fn_with_state(state, middleware::require_admin_session));

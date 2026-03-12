@@ -6,4 +6,5 @@ pub mod publish_events;
 pub mod team_members;
 pub mod teams;
 pub mod tokens;
+pub mod upstream_cache;
 pub mod users;

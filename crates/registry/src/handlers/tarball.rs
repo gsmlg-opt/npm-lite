@@ -63,7 +63,25 @@ async fn do_stream(
         }
     }
 
-    // Not found locally — try upstream.
+    // Check if we have a cached upstream tarball in S3.
+    let cache_key = npm_upstream::upstream_tarball_s3_key(package_name, version);
+    if let Some(upstream) = &state.upstream
+        && upstream.config().cache_enabled
+            && let Some(meta) = state
+                .storage
+                .head_object(&cache_key)
+                .await
+                .map_err(RegistryError::Storage)?
+            {
+                debug!(
+                    package = %package_name,
+                    version = %version,
+                    "serving cached upstream tarball from S3"
+                );
+                return stream_from_s3(&state, &cache_key, meta.size, filename).await;
+            }
+
+    // Not found locally or in cache — try upstream.
     stream_from_upstream(&state, package_name, version, filename).await
 }
 
@@ -99,9 +117,6 @@ async fn stream_from_s3(
 }
 
 /// Stream a tarball from the upstream registry.
-///
-/// For Phase 1, we fetch the upstream packument first to discover the original
-/// tarball URL, then stream that tarball through to the client.
 async fn stream_from_upstream(
     state: &AppState,
     package_name: &str,
@@ -115,15 +130,28 @@ async fn stream_from_upstream(
         ))
     })?;
 
+    // Use the routing system.
+    let route = npm_upstream::resolve_upstream(upstream.config(), package_name);
+    let upstream_url = match route {
+        npm_upstream::RouteTarget::Local | npm_upstream::RouteTarget::None => {
+            return Err(RegistryError::NotFound(format!(
+                "version '{}' of package '{}' not found",
+                version, package_name
+            )));
+        }
+        npm_upstream::RouteTarget::Upstream(url) => url,
+    };
+
     debug!(
         package = %package_name,
         version = %version,
+        upstream = %upstream_url,
         "tarball not found locally, trying upstream"
     );
 
     // Fetch the packument from upstream to discover the original tarball URL.
     let packument = upstream
-        .fetch_packument(package_name)
+        .fetch_packument_from(package_name, &upstream_url)
         .await
         .map_err(|e| super::packument::upstream_error_to_registry(e, package_name))?;
 
@@ -137,7 +165,51 @@ async fn stream_from_upstream(
             },
         )?;
 
-    // Stream the tarball from upstream.
+    // If caching is enabled, download the full tarball, cache to S3, then serve from memory.
+    let config = upstream.config();
+    if config.cache_enabled {
+        match upstream.download_tarball(&tarball_url).await {
+            Ok(data) => {
+                let cache_key = npm_upstream::upstream_tarball_s3_key(package_name, version);
+                let data_len = data.len();
+
+                // Upload to S3 cache in background (best-effort).
+                let storage = state.storage.clone();
+                let cache_key_owned = cache_key.clone();
+                let data_clone = data.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = storage
+                        .upload(&cache_key_owned, data_clone, "application/octet-stream")
+                        .await
+                    {
+                        tracing::warn!(key = %cache_key_owned, error = %e, "failed to cache upstream tarball");
+                    }
+                });
+
+                let response = Response::builder()
+                    .status(StatusCode::OK)
+                    .header(header::CONTENT_TYPE, "application/octet-stream")
+                    .header(
+                        header::CONTENT_DISPOSITION,
+                        format!(
+                            "attachment; filename=\"{}\"",
+                            sanitize_filename(filename)
+                        ),
+                    )
+                    .header(header::CONTENT_LENGTH, data_len.to_string())
+                    .body(Body::from(data))
+                    .map_err(|e| RegistryError::Internal(e.to_string()))?;
+
+                return Ok(response);
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "failed to download tarball for caching, falling back to streaming");
+                // Fall through to streaming below.
+            }
+        }
+    }
+
+    // Stream the tarball from upstream (no caching).
     let (stream, content_length) = upstream
         .stream_tarball(&tarball_url)
         .await

@@ -8,6 +8,7 @@ npm-core = { workspace = true }
 npm-db = { workspace = true }
 npm-registry = { workspace = true }
 npm-entity = { workspace = true }
+npm-upstream = { workspace = true }
 thiserror = { workspace = true }
 axum = { workspace = true }
 axum-extra = { workspace = true }

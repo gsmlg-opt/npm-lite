@@ -6,4 +6,5 @@ pub mod packages;
 pub mod settings;
 pub mod teams;
 pub mod tokens;
+pub mod upstream;
 pub mod users;

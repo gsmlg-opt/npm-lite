@@ -29,7 +29,12 @@ impl UpstreamClient {
         Ok(Self { client, config })
     }
 
-    /// Returns the configured upstream URL, or `Err(NoUpstream)` if none.
+    /// Returns a reference to the upstream configuration.
+    pub fn config(&self) -> &UpstreamConfig {
+        &self.config
+    }
+
+    /// Returns the configured global upstream URL, or `Err(NoUpstream)` if none.
     fn upstream_url(&self) -> Result<&str, UpstreamError> {
         self.config
             .upstream_url
@@ -37,13 +42,26 @@ impl UpstreamClient {
             .ok_or(UpstreamError::NoUpstream)
     }
 
-    /// Fetch a packument (package metadata JSON) from the upstream.
+    /// Fetch a packument (package metadata JSON) from the default upstream.
     pub async fn fetch_packument(
         &self,
         package_name: &str,
     ) -> Result<serde_json::Value, UpstreamError> {
         let base = self.upstream_url()?;
-        let url = format!("{}/{}", base.trim_end_matches('/'), package_name);
+        self.fetch_packument_from(package_name, base).await
+    }
+
+    /// Fetch a packument from a specific upstream URL.
+    pub async fn fetch_packument_from(
+        &self,
+        package_name: &str,
+        upstream_url: &str,
+    ) -> Result<serde_json::Value, UpstreamError> {
+        let url = format!(
+            "{}/{}",
+            upstream_url.trim_end_matches('/'),
+            package_name
+        );
 
         debug!(url = %url, "fetching packument from upstream");
 
@@ -143,5 +161,46 @@ impl UpstreamClient {
         let stream = resp.bytes_stream();
 
         Ok((Box::pin(stream), content_length))
+    }
+
+    /// Download a tarball fully into memory (for caching to S3).
+    pub async fn download_tarball(
+        &self,
+        tarball_url: &str,
+    ) -> Result<Bytes, UpstreamError> {
+        debug!(url = %tarball_url, "downloading tarball from upstream for caching");
+
+        let resp = self
+            .client
+            .get(tarball_url)
+            .send()
+            .await
+            .map_err(|e| {
+                if e.is_timeout() {
+                    UpstreamError::Timeout(tarball_url.to_string())
+                } else {
+                    UpstreamError::Request(e)
+                }
+            })?;
+
+        let status = resp.status().as_u16();
+        match status {
+            200 => {}
+            404 => return Err(UpstreamError::NotFound(tarball_url.to_string())),
+            s if s >= 500 => {
+                return Err(UpstreamError::UpstreamServerError {
+                    status: s,
+                    url: tarball_url.to_string(),
+                });
+            }
+            _ => {
+                return Err(UpstreamError::UpstreamServerError {
+                    status,
+                    url: tarball_url.to_string(),
+                });
+            }
+        }
+
+        resp.bytes().await.map_err(UpstreamError::Request)
     }
 }

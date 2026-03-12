@@ -138,17 +138,91 @@ async fn fetch_upstream_packument(
         RegistryError::NotFound(format!("package '{}' not found", package_name))
     })?;
 
-    debug!(package = %package_name, "package not found locally, trying upstream");
+    // Use the routing system to determine which upstream to use.
+    let route = npm_upstream::resolve_upstream(upstream.config(), package_name);
+    let upstream_url = match route {
+        npm_upstream::RouteTarget::Local => {
+            return Err(RegistryError::NotFound(format!(
+                "package '{}' not found",
+                package_name
+            )));
+        }
+        npm_upstream::RouteTarget::None => {
+            return Err(RegistryError::NotFound(format!(
+                "package '{}' not found",
+                package_name
+            )));
+        }
+        npm_upstream::RouteTarget::Upstream(url) => url,
+    };
 
-    let mut packument = upstream
-        .fetch_packument(package_name)
-        .await
-        .map_err(|e| upstream_error_to_registry(e, package_name))?;
+    debug!(package = %package_name, upstream = %upstream_url, "package not found locally, trying upstream");
 
-    // Rewrite tarball URLs so the client fetches tarballs through this registry.
-    npm_upstream::proxy::rewrite_tarball_urls(&mut packument, &state.config.registry_url);
+    // Check metadata cache if caching is enabled.
+    let config = upstream.config();
+    if config.cache_enabled {
+        // Try fresh cache first.
+        if let Some(cached) =
+            npm_upstream::get_cached_packument(&state.db, package_name, config.cache_ttl, false)
+                .await
+        {
+            let mut packument = cached;
+            npm_upstream::proxy::rewrite_tarball_urls(&mut packument, &state.config.registry_url);
+            return Ok(Json(packument));
+        }
+    }
 
-    Ok(Json(packument))
+    // Fetch from upstream.
+    let fetch_result = upstream
+        .fetch_packument_from(package_name, &upstream_url)
+        .await;
+
+    match fetch_result {
+        Ok(mut packument) => {
+            // Cache the raw packument (before URL rewriting) if caching is enabled.
+            if config.cache_enabled {
+                npm_upstream::put_cached_packument(
+                    &state.db,
+                    package_name,
+                    &upstream_url,
+                    &packument,
+                )
+                .await;
+            }
+
+            // Rewrite tarball URLs so the client fetches tarballs through this registry.
+            npm_upstream::proxy::rewrite_tarball_urls(
+                &mut packument,
+                &state.config.registry_url,
+            );
+            Ok(Json(packument))
+        }
+        Err(e) => {
+            // If upstream fails and we have a stale cache, serve it (stale-while-error).
+            if config.cache_enabled
+                && let Some(cached) = npm_upstream::get_cached_packument(
+                    &state.db,
+                    package_name,
+                    config.cache_ttl,
+                    true, // allow stale
+                )
+                .await
+                {
+                    tracing::warn!(
+                        package = %package_name,
+                        error = %e,
+                        "upstream failed, serving stale cache"
+                    );
+                    let mut packument = cached;
+                    npm_upstream::proxy::rewrite_tarball_urls(
+                        &mut packument,
+                        &state.config.registry_url,
+                    );
+                    return Ok(Json(packument));
+                }
+            Err(upstream_error_to_registry(e, package_name))
+        }
+    }
 }
 
 /// Map upstream errors to appropriate HTTP status codes per PRD section 4.4.
