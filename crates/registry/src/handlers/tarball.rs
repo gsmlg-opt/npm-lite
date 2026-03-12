@@ -125,15 +125,7 @@ async fn stream_from_upstream(
     let packument = upstream
         .fetch_packument(package_name)
         .await
-        .map_err(|e| match e {
-            npm_upstream::UpstreamError::NotFound(_) => {
-                RegistryError::NotFound(format!("package '{}' not found", package_name))
-            }
-            other => {
-                tracing::error!(error = %other, "upstream proxy error");
-                RegistryError::Internal("upstream proxy error".to_string())
-            }
-        })?;
+        .map_err(|e| super::packument::upstream_error_to_registry(e, package_name))?;
 
     let tarball_url =
         npm_upstream::proxy::extract_upstream_tarball_url(&packument, version).ok_or_else(
@@ -149,19 +141,7 @@ async fn stream_from_upstream(
     let (stream, content_length) = upstream
         .stream_tarball(&tarball_url)
         .await
-        .map_err(|e| match e {
-            npm_upstream::UpstreamError::NotFound(_) => RegistryError::NotFound(format!(
-                "tarball for '{}@{}' not found on upstream",
-                package_name, version
-            )),
-            npm_upstream::UpstreamError::Timeout(_) => {
-                RegistryError::Internal("upstream request timed out".to_string())
-            }
-            other => {
-                tracing::error!(error = %other, "upstream tarball proxy error");
-                RegistryError::Internal("upstream proxy error".to_string())
-            }
-        })?;
+        .map_err(|e| super::packument::upstream_error_to_registry(e, package_name))?;
 
     let body_stream = stream.map(|chunk| chunk.map_err(|e| std::io::Error::other(e.to_string())));
     let body = Body::from_stream(body_stream);

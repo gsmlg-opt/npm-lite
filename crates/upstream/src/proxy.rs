@@ -148,4 +148,81 @@ mod tests {
         // Should not panic, just no-op
         assert_eq!(packument["name"], "empty");
     }
+
+    #[test]
+    fn rewrites_multiple_versions() {
+        let mut packument = json!({
+            "name": "lodash",
+            "versions": {
+                "4.17.20": {
+                    "dist": {
+                        "tarball": "https://registry.npmjs.org/lodash/-/lodash-4.17.20.tgz"
+                    }
+                },
+                "4.17.21": {
+                    "dist": {
+                        "tarball": "https://registry.npmjs.org/lodash/-/lodash-4.17.21.tgz"
+                    }
+                }
+            }
+        });
+
+        rewrite_tarball_urls(&mut packument, "https://my-reg.com");
+
+        assert_eq!(
+            packument["versions"]["4.17.20"]["dist"]["tarball"].as_str().unwrap(),
+            "https://my-reg.com/lodash/-/lodash-4.17.20.tgz"
+        );
+        assert_eq!(
+            packument["versions"]["4.17.21"]["dist"]["tarball"].as_str().unwrap(),
+            "https://my-reg.com/lodash/-/lodash-4.17.21.tgz"
+        );
+    }
+
+    #[test]
+    fn registry_url_trailing_slash_stripped() {
+        let mut packument = json!({
+            "name": "pkg",
+            "versions": {
+                "1.0.0": {
+                    "dist": {
+                        "tarball": "https://registry.npmjs.org/pkg/-/pkg-1.0.0.tgz"
+                    }
+                }
+            }
+        });
+
+        rewrite_tarball_urls(&mut packument, "https://my-reg.com/");
+
+        let tarball = packument["versions"]["1.0.0"]["dist"]["tarball"].as_str().unwrap();
+        assert_eq!(tarball, "https://my-reg.com/pkg/-/pkg-1.0.0.tgz");
+    }
+
+    #[test]
+    fn skips_version_without_dist() {
+        let mut packument = json!({
+            "name": "pkg",
+            "versions": {
+                "1.0.0": {
+                    "name": "pkg"
+                }
+            }
+        });
+
+        rewrite_tarball_urls(&mut packument, "https://my-reg.com");
+        // Should not panic; version without dist is left unchanged
+        assert!(packument["versions"]["1.0.0"]["dist"].is_null());
+    }
+
+    #[test]
+    fn extract_returns_none_for_missing_dist() {
+        let packument = json!({
+            "versions": {
+                "1.0.0": {
+                    "name": "pkg"
+                }
+            }
+        });
+        assert_eq!(extract_upstream_tarball_url(&packument, "1.0.0"), None);
+    }
 }

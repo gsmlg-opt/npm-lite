@@ -31,6 +31,12 @@ pub enum RegistryError {
 
     #[error("internal error: {0}")]
     Internal(String),
+
+    #[error("bad gateway: {0}")]
+    BadGateway(String),
+
+    #[error("gateway timeout: {0}")]
+    GatewayTimeout(String),
 }
 
 impl IntoResponse for RegistryError {
@@ -61,6 +67,14 @@ impl IntoResponse for RegistryError {
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "internal server error".to_string(),
                 )
+            }
+            RegistryError::BadGateway(msg) => {
+                tracing::error!(error = %msg, "bad gateway");
+                (StatusCode::BAD_GATEWAY, msg.clone())
+            }
+            RegistryError::GatewayTimeout(msg) => {
+                tracing::error!(error = %msg, "gateway timeout");
+                (StatusCode::GATEWAY_TIMEOUT, msg.clone())
             }
         };
 

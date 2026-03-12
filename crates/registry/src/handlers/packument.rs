@@ -143,26 +143,37 @@ async fn fetch_upstream_packument(
     let mut packument = upstream
         .fetch_packument(package_name)
         .await
-        .map_err(|e| match e {
-            npm_upstream::UpstreamError::NotFound(_) => {
-                RegistryError::NotFound(format!("package '{}' not found", package_name))
-            }
-            npm_upstream::UpstreamError::Timeout(_) => {
-                RegistryError::Internal("upstream request timed out".to_string())
-            }
-            npm_upstream::UpstreamError::UpstreamServerError { status, .. } if status >= 500 => {
-                RegistryError::Internal("upstream server error".to_string())
-            }
-            other => {
-                tracing::error!(error = %other, "upstream proxy error");
-                RegistryError::Internal("upstream proxy error".to_string())
-            }
-        })?;
+        .map_err(|e| upstream_error_to_registry(e, package_name))?;
 
     // Rewrite tarball URLs so the client fetches tarballs through this registry.
     npm_upstream::proxy::rewrite_tarball_urls(&mut packument, &state.config.registry_url);
 
     Ok(Json(packument))
+}
+
+/// Map upstream errors to appropriate HTTP status codes per PRD section 4.4.
+pub(crate) fn upstream_error_to_registry(
+    e: npm_upstream::UpstreamError,
+    package_name: &str,
+) -> RegistryError {
+    match e {
+        npm_upstream::UpstreamError::NotFound(_) => {
+            RegistryError::NotFound(format!("package '{}' not found", package_name))
+        }
+        npm_upstream::UpstreamError::Timeout(_) => {
+            RegistryError::GatewayTimeout("upstream request timed out".to_string())
+        }
+        npm_upstream::UpstreamError::UpstreamServerError { .. } => {
+            RegistryError::BadGateway("upstream server error".to_string())
+        }
+        npm_upstream::UpstreamError::InvalidResponse(msg) => {
+            RegistryError::BadGateway(format!("invalid upstream response: {}", msg))
+        }
+        other => {
+            tracing::error!(error = %other, "upstream proxy error");
+            RegistryError::BadGateway("upstream proxy error".to_string())
+        }
+    }
 }
 
 /// Construct the tarball download URL for a given package + version.

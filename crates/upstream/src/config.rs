@@ -37,3 +37,35 @@ impl UpstreamConfig {
         self.upstream_url.is_some()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn disabled_when_no_url() {
+        let config = UpstreamConfig {
+            upstream_url: None,
+            timeout: Duration::from_secs(30),
+        };
+        assert!(!config.is_enabled());
+    }
+
+    #[test]
+    fn enabled_when_url_set() {
+        let config = UpstreamConfig {
+            upstream_url: Some("https://registry.npmjs.org".to_string()),
+            timeout: Duration::from_secs(30),
+        };
+        assert!(config.is_enabled());
+    }
+
+    #[test]
+    fn default_timeout_is_30s() {
+        let config = UpstreamConfig {
+            upstream_url: None,
+            timeout: Duration::from_secs(30),
+        };
+        assert_eq!(config.timeout, Duration::from_secs(30));
+    }
+}
