@@ -11,7 +11,7 @@ use serde::Deserialize;
 use tracing::instrument;
 use uuid::Uuid;
 
-use npm_entity::{dist_tags, package_versions, packages, publish_events};
+use npm_entity::{dist_tags, package_versions, packages, publish_events, upstream_cache};
 
 use crate::{
     error::{WebError, WebResult},
@@ -47,6 +47,14 @@ pub async fn package_list_page(
     let total_pages = paginator.num_pages().await?;
     let pkgs = paginator.fetch_page(page).await?;
 
+    // Collect cached upstream package names for source indicator.
+    let cached_names: std::collections::HashSet<String> = upstream_cache::Entity::find()
+        .all(db)
+        .await?
+        .into_iter()
+        .map(|c| c.package_name)
+        .collect();
+
     // Search form
     let search_form = format!(
         r#"<form method="get" action="/admin/packages" class="flex gap-2 mb-6">
@@ -78,6 +86,11 @@ pub async fn package_list_page(
                 .unwrap_or_default();
             let desc = pkg.description.as_deref().unwrap_or("—").to_string();
             let ts = pkg.updated_at.format("%Y-%m-%d").to_string();
+            let source_badge = if cached_names.contains(&pkg.name) {
+                r#"<span class="badge badge-warning badge-sm">cached</span>"#
+            } else {
+                r#"<span class="badge badge-success badge-sm">local</span>"#
+            };
             format!(
                 r#"<tr>
   <td>
@@ -85,11 +98,13 @@ pub async fn package_list_page(
     {scope}
   </td>
   <td class="text-sm opacity-80">{desc}</td>
+  <td>{source_badge}</td>
   <td class="text-sm opacity-60">{ts}</td>
 </tr>"#,
                 name = html_escape(&pkg.name),
                 scope = scope,
                 desc = html_escape(&desc),
+                source_badge = source_badge,
             )
         })
         .collect();
@@ -100,7 +115,7 @@ pub async fn package_list_page(
         format!(
             r#"<div class="overflow-x-auto">
 <table class="table table-zebra">
-  <thead><tr><th>Name</th><th>Description</th><th>Updated</th></tr></thead>
+  <thead><tr><th>Name</th><th>Description</th><th>Source</th><th>Updated</th></tr></thead>
   <tbody>{rows}</tbody>
 </table>
 </div>"#,

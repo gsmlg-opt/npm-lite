@@ -2378,6 +2378,7 @@ dependencies = [
  "chrono",
  "futures",
  "npm-entity",
+ "regex",
  "reqwest",
  "sea-orm",
  "serde",

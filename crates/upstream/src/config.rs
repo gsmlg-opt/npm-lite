@@ -27,6 +27,16 @@ pub struct UpstreamConfig {
 
     /// Scopes that should never be proxied (always local-only).
     pub local_scopes: Vec<String>,
+
+    /// Pattern-based routing rules (regex → upstream URL). Evaluated in order.
+    pub pattern_rules: Vec<PatternRule>,
+}
+
+/// A regex-based routing rule.
+#[derive(Debug, Clone)]
+pub struct PatternRule {
+    pub pattern: String,
+    pub target: String,
 }
 
 /// TOML file structure for upstream configuration.
@@ -43,11 +53,18 @@ struct TomlUpstream {
     timeout_secs: Option<u64>,
     local_scopes: Option<TomlLocalScopes>,
     scopes: Option<HashMap<String, String>>,
+    patterns: Option<Vec<TomlPatternRule>>,
 }
 
 #[derive(Debug, Deserialize, Default)]
 struct TomlLocalScopes {
     scopes: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TomlPatternRule {
+    pattern: String,
+    target: String,
 }
 
 impl UpstreamConfig {
@@ -80,6 +97,7 @@ impl UpstreamConfig {
             cache_ttl: Duration::from_secs(cache_ttl_secs),
             scope_rules: HashMap::new(),
             local_scopes: Vec::new(),
+            pattern_rules: Vec::new(),
         };
 
         // Overlay TOML config if path is specified.
@@ -126,6 +144,15 @@ impl UpstreamConfig {
             if let Some(scopes) = upstream.scopes {
                 self.scope_rules = scopes;
             }
+            if let Some(patterns) = upstream.patterns {
+                self.pattern_rules = patterns
+                    .into_iter()
+                    .map(|p| PatternRule {
+                        pattern: p.pattern,
+                        target: p.target,
+                    })
+                    .collect();
+            }
         }
     }
 
@@ -148,6 +175,7 @@ mod tests {
             cache_ttl: Duration::from_secs(300),
             scope_rules: HashMap::new(),
             local_scopes: Vec::new(),
+            pattern_rules: Vec::new(),
         };
         assert!(!config.is_enabled());
     }
@@ -161,6 +189,7 @@ mod tests {
             cache_ttl: Duration::from_secs(300),
             scope_rules: HashMap::new(),
             local_scopes: Vec::new(),
+            pattern_rules: Vec::new(),
         };
         assert!(config.is_enabled());
     }
@@ -174,6 +203,7 @@ mod tests {
             cache_ttl: Duration::from_secs(300),
             scope_rules: HashMap::new(),
             local_scopes: Vec::new(),
+            pattern_rules: Vec::new(),
         };
         assert_eq!(config.timeout, Duration::from_secs(30));
     }
@@ -187,6 +217,7 @@ mod tests {
             cache_ttl: Duration::from_secs(300),
             scope_rules: HashMap::new(),
             local_scopes: Vec::new(),
+            pattern_rules: Vec::new(),
         };
 
         let toml_str = r#"
@@ -227,6 +258,7 @@ mod tests {
             cache_ttl: Duration::from_secs(300),
             scope_rules: HashMap::new(),
             local_scopes: Vec::new(),
+            pattern_rules: Vec::new(),
         };
 
         let toml_str = r#"
@@ -241,6 +273,44 @@ mod tests {
         assert_eq!(
             config.upstream_url.as_deref(),
             Some("https://env-registry.example.com")
+        );
+    }
+
+    #[test]
+    fn apply_toml_sets_pattern_rules() {
+        let mut config = UpstreamConfig {
+            upstream_url: None,
+            timeout: Duration::from_secs(30),
+            cache_enabled: false,
+            cache_ttl: Duration::from_secs(300),
+            scope_rules: HashMap::new(),
+            local_scopes: Vec::new(),
+            pattern_rules: Vec::new(),
+        };
+
+        let toml_str = r#"
+            [upstream]
+            url = "https://registry.npmjs.org"
+
+            [[upstream.patterns]]
+            pattern = "^internal-.*"
+            target = "local"
+
+            [[upstream.patterns]]
+            pattern = "^legacy-.*"
+            target = "https://legacy-registry.example.com"
+        "#;
+
+        let toml_cfg: TomlConfig = toml::from_str(toml_str).unwrap();
+        config.apply_toml(toml_cfg);
+
+        assert_eq!(config.pattern_rules.len(), 2);
+        assert_eq!(config.pattern_rules[0].pattern, "^internal-.*");
+        assert_eq!(config.pattern_rules[0].target, "local");
+        assert_eq!(config.pattern_rules[1].pattern, "^legacy-.*");
+        assert_eq!(
+            config.pattern_rules[1].target,
+            "https://legacy-registry.example.com"
         );
     }
 }

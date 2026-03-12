@@ -24,31 +24,40 @@ pub async fn upstream_page(State(state): State<AppState>) -> WebResult<Html<Stri
         0
     };
 
-    let (upstream_status, upstream_url, cache_enabled, cache_ttl, scope_rules, local_scopes) =
-        match upstream {
-            Some(client) => {
-                let cfg = client.config();
-                (
-                    "Enabled",
-                    cfg.upstream_url
-                        .as_deref()
-                        .unwrap_or("(none)")
-                        .to_string(),
-                    cfg.cache_enabled,
-                    cfg.cache_ttl.as_secs(),
-                    cfg.scope_rules.clone(),
-                    cfg.local_scopes.clone(),
-                )
-            }
-            None => (
-                "Disabled",
-                "(not configured)".to_string(),
-                false,
-                300u64,
-                std::collections::HashMap::new(),
-                Vec::new(),
-            ),
-        };
+    let (
+        upstream_status,
+        upstream_url,
+        cache_enabled,
+        cache_ttl,
+        scope_rules,
+        local_scopes,
+        pattern_rules,
+    ) = match upstream {
+        Some(client) => {
+            let cfg = client.config();
+            (
+                "Enabled",
+                cfg.upstream_url
+                    .as_deref()
+                    .unwrap_or("(none)")
+                    .to_string(),
+                cfg.cache_enabled,
+                cfg.cache_ttl.as_secs(),
+                cfg.scope_rules.clone(),
+                cfg.local_scopes.clone(),
+                cfg.pattern_rules.clone(),
+            )
+        }
+        None => (
+            "Disabled",
+            "(not configured)".to_string(),
+            false,
+            300u64,
+            std::collections::HashMap::new(),
+            Vec::new(),
+            Vec::new(),
+        ),
+    };
 
     // Build scope rules table rows.
     let scope_rows = if scope_rules.is_empty() && local_scopes.is_empty() {
@@ -74,6 +83,31 @@ pub async fn upstream_page(State(state): State<AppState>) -> WebResult<Html<Stri
             rows.push_str(&format!(
                 r#"<tr><td class="font-mono">{scope}</td><td>{badge}</td></tr>"#,
                 scope = html_escape(scope),
+                badge = badge,
+            ));
+        }
+        rows
+    };
+
+    // Build pattern rules table rows.
+    let pattern_rows = if pattern_rules.is_empty() {
+        r#"<tr><td colspan="3" class="text-center opacity-50">No pattern rules configured</td></tr>"#
+            .to_string()
+    } else {
+        let mut rows = String::new();
+        for (i, rule) in pattern_rules.iter().enumerate() {
+            let badge = if rule.target == "local" {
+                r#"<span class="badge badge-error">local</span>"#.to_string()
+            } else {
+                format!(
+                    r#"<span class="badge badge-info font-mono text-xs">{}</span>"#,
+                    html_escape(&rule.target)
+                )
+            };
+            rows.push_str(&format!(
+                r#"<tr><td>{order}</td><td class="font-mono text-sm">{pattern}</td><td>{badge}</td></tr>"#,
+                order = i + 1,
+                pattern = html_escape(&rule.pattern),
                 badge = badge,
             ));
         }
@@ -138,6 +172,26 @@ pub async fn upstream_page(State(state): State<AppState>) -> WebResult<Html<Stri
     </div>
   </div>
 
+  <!-- Pattern Rules -->
+  <div class="card bg-base-200 shadow md:col-span-2">
+    <div class="card-body">
+      <h2 class="card-title text-lg">Pattern Routing Rules</h2>
+      <p class="text-sm opacity-70 mb-2">
+        Configure in <code>upstream.toml</code> under <code>[[upstream.patterns]]</code>. Evaluated in order; first match wins.
+      </p>
+      <div class="overflow-x-auto">
+        <table class="table">
+          <thead>
+            <tr><th>#</th><th>Pattern (regex)</th><th>Target</th></tr>
+          </thead>
+          <tbody>
+            {pattern_rows}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <!-- Configuration Help -->
   <div class="card bg-base-200 shadow md:col-span-2">
     <div class="card-body">
@@ -161,7 +215,15 @@ cache_ttl_secs = 300
 scopes = ["@mycompany", "@internal"]
 
 [upstream.scopes]
-"@partner" = "https://partner-registry.example.com"</code></pre>
+"@partner" = "https://partner-registry.example.com"
+
+[[upstream.patterns]]
+pattern = "^internal-.*"
+target = "local"
+
+[[upstream.patterns]]
+pattern = "^legacy-.*"
+target = "https://legacy-registry.example.com"</code></pre>
       </div>
     </div>
   </div>
@@ -192,6 +254,7 @@ scopes = ["@mycompany", "@internal"]
             ""
         },
         scope_rows = scope_rows,
+        pattern_rows = pattern_rows,
     );
 
     Ok(Html(layout("Upstream Proxy", &content)))
