@@ -76,7 +76,7 @@ async fn do_stream(
         .map_err(RegistryError::Storage)?;
 
     let body_stream = stream.map(|chunk| {
-        chunk.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
+        chunk.map_err(|e| std::io::Error::other(e.to_string()))
     });
 
     let body = Body::from_stream(body_stream);
