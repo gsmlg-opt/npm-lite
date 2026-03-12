@@ -195,10 +195,10 @@ impl S3Storage {
             Err(e) => {
                 // A 404 / NotFound means the object simply doesn't exist.
                 use aws_sdk_s3::operation::head_object::HeadObjectError;
-                if let Some(svc_err) = e.as_service_error() {
-                    if matches!(svc_err, HeadObjectError::NotFound(_)) {
-                        return Ok(None);
-                    }
+                if let Some(svc_err) = e.as_service_error()
+                    && matches!(svc_err, HeadObjectError::NotFound(_))
+                {
+                    return Ok(None);
                 }
                 return Err(StorageError::HeadFailed {
                     key: key.to_owned(),
