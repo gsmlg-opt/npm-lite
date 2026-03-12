@@ -109,7 +109,7 @@ pub async fn build_packument(
 
         // Track which version is the most recently published (to fall back for
         // "latest" if no explicit dist-tag exists).
-        if latest_created.map_or(true, |prev| ver.created_at > prev) {
+        if latest_created.is_none_or(|prev| ver.created_at > prev) {
             latest_version = Some(ver.version.clone());
             latest_created = Some(ver.created_at);
         }
@@ -125,10 +125,10 @@ pub async fn build_packument(
         }
     }
     // Ensure "latest" is always present.
-    if !dist_tags_map.contains_key("latest") {
-        if let Some(v) = latest_version {
-            dist_tags_map.insert("latest".to_string(), Value::String(v));
-        }
+    if !dist_tags_map.contains_key("latest")
+        && let Some(v) = latest_version
+    {
+        dist_tags_map.insert("latest".to_string(), Value::String(v));
     }
 
     // 6. Assemble the packument.
