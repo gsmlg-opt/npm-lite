@@ -1,9 +1,6 @@
 //! Admin pages for upstream proxy configuration and cache management.
 
-use axum::{
-    extract::State,
-    response::Html,
-};
+use axum::{extract::State, response::Html};
 use tracing::instrument;
 
 use crate::{
@@ -39,10 +36,7 @@ pub async fn upstream_page(State(state): State<AppState>) -> WebResult<Html<Stri
             let cfg = client.config();
             (
                 "Enabled",
-                cfg.upstream_url
-                    .as_deref()
-                    .unwrap_or("(none)")
-                    .to_string(),
+                cfg.upstream_url.as_deref().unwrap_or("(none)").to_string(),
                 cfg.cache_enabled,
                 cfg.cache_ttl.as_secs(),
                 cfg.scope_rules.clone(),
@@ -64,7 +58,9 @@ pub async fn upstream_page(State(state): State<AppState>) -> WebResult<Html<Stri
     };
 
     // Load DB-stored rules.
-    let db_rules = npm_upstream::list_rules(&state.db).await.unwrap_or_default();
+    let db_rules = npm_upstream::list_rules(&state.db)
+        .await
+        .unwrap_or_default();
 
     // Build scope rules table rows (from config files).
     let scope_rows = if scope_rules.is_empty() && local_scopes.is_empty() {

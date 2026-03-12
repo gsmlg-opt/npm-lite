@@ -23,11 +23,7 @@ impl MigrationTrait for Migration {
                             .primary_key()
                             .default(Expr::cust("gen_random_uuid()")),
                     )
-                    .col(
-                        ColumnDef::new(UpstreamConfigs::RuleType)
-                            .text()
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(UpstreamConfigs::RuleType).text().not_null())
                     .col(
                         ColumnDef::new(UpstreamConfigs::MatchValue)
                             .text()
@@ -38,11 +34,7 @@ impl MigrationTrait for Migration {
                             .text()
                             .not_null(),
                     )
-                    .col(
-                        ColumnDef::new(UpstreamConfigs::AuthTokenRef)
-                            .text()
-                            .null(),
-                    )
+                    .col(ColumnDef::new(UpstreamConfigs::AuthTokenRef).text().null())
                     .col(
                         ColumnDef::new(UpstreamConfigs::Priority)
                             .integer()

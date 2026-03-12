@@ -25,7 +25,7 @@ pub use cache::{
 pub use client::UpstreamClient;
 pub use config::UpstreamConfig;
 pub use db_rules::{
-    UpstreamRule, RuleInput, apply_db_rules, create_rule, delete_rule, get_rule, list_rules,
+    RuleInput, UpstreamRule, apply_db_rules, create_rule, delete_rule, get_rule, list_rules,
     update_rule,
 };
 pub use error::UpstreamError;

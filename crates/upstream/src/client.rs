@@ -78,9 +78,7 @@ impl UpstreamClient {
     /// Look up the auth token for a given upstream URL, if any.
     fn auth_token_for(&self, upstream_url: &str) -> Option<&str> {
         let normalized = upstream_url.trim_end_matches('/');
-        self.auth_tokens
-            .get(normalized)
-            .map(|s| s.as_str())
+        self.auth_tokens.get(normalized).map(|s| s.as_str())
     }
 
     /// Fetch a packument (package metadata JSON) from the default upstream.
@@ -103,18 +101,11 @@ impl UpstreamClient {
             return Err(UpstreamError::CircuitOpen(upstream_url.to_string()));
         }
 
-        let url = format!(
-            "{}/{}",
-            upstream_url.trim_end_matches('/'),
-            package_name
-        );
+        let url = format!("{}/{}", upstream_url.trim_end_matches('/'), package_name);
 
         debug!(url = %url, "fetching packument from upstream");
 
-        let mut req = self
-            .client
-            .get(&url)
-            .header("Accept", "application/json");
+        let mut req = self.client.get(&url).header("Accept", "application/json");
 
         // Attach auth token if configured for this upstream.
         if let Some(token) = self.auth_token_for(upstream_url) {
@@ -142,28 +133,21 @@ impl UpstreamClient {
             s if s >= 500 => {
                 self.circuit_breaker.record_failure(upstream_url);
                 crate::webhook::notify_upstream_error(upstream_url, s);
-                return Err(UpstreamError::UpstreamServerError {
-                    status: s,
-                    url,
-                });
+                return Err(UpstreamError::UpstreamServerError { status: s, url });
             }
             _ => {
                 warn!(status, url = %url, "unexpected upstream status");
-                return Err(UpstreamError::UpstreamServerError {
-                    status,
-                    url,
-                });
+                return Err(UpstreamError::UpstreamServerError { status, url });
             }
         }
 
         let body = resp.text().await.map_err(UpstreamError::Request)?;
-        let packument: serde_json::Value =
-            serde_json::from_str(&body).map_err(|e| {
-                UpstreamError::InvalidResponse(format!(
-                    "failed to parse packument for '{}': {}",
-                    package_name, e
-                ))
-            })?;
+        let packument: serde_json::Value = serde_json::from_str(&body).map_err(|e| {
+            UpstreamError::InvalidResponse(format!(
+                "failed to parse packument for '{}': {}",
+                package_name, e
+            ))
+        })?;
 
         Ok(packument)
     }
@@ -249,10 +233,7 @@ impl UpstreamClient {
     }
 
     /// Download a tarball fully into memory (for caching to S3).
-    pub async fn download_tarball(
-        &self,
-        tarball_url: &str,
-    ) -> Result<Bytes, UpstreamError> {
+    pub async fn download_tarball(&self, tarball_url: &str) -> Result<Bytes, UpstreamError> {
         let upstream_base = url::Url::parse(tarball_url)
             .ok()
             .map(|p| format!("{}://{}", p.scheme(), p.host_str().unwrap_or("")));

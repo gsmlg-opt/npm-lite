@@ -86,7 +86,10 @@ async fn main() -> anyhow::Result<()> {
     match npm_upstream::list_rules(&db).await {
         Ok(db_rules) => {
             if !db_rules.is_empty() {
-                info!(count = db_rules.len(), "loaded upstream rules from database");
+                info!(
+                    count = db_rules.len(),
+                    "loaded upstream rules from database"
+                );
                 npm_upstream::apply_db_rules(&mut upstream_config, &db_rules);
             }
         }
@@ -136,7 +139,10 @@ async fn main() -> anyhow::Result<()> {
                 upstream_client.config().cache_ttl,
                 std::time::Duration::from_secs(warmup_interval_secs),
             );
-            info!(interval_secs = warmup_interval_secs, "cache warmup task enabled");
+            info!(
+                interval_secs = warmup_interval_secs,
+                "cache warmup task enabled"
+            );
         }
     }
 

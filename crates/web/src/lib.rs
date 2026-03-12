@@ -82,10 +82,7 @@ pub fn web_router(state: AppState) -> Router<AppState> {
             "/api/upstream/rules/{id}",
             put(upstream_api::update_rule).delete(upstream_api::delete_rule),
         )
-        .route(
-            "/api/upstream/cache",
-            delete(upstream_api::purge_all_cache),
-        )
+        .route("/api/upstream/cache", delete(upstream_api::purge_all_cache))
         .route(
             "/api/upstream/cache/{package}",
             delete(upstream_api::purge_package_cache),

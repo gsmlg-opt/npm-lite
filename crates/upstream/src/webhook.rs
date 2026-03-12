@@ -59,12 +59,7 @@ pub fn notify(event_type: &str, upstream_url: &str, message: &str) {
     // Spawn fire-and-forget task.
     tokio::spawn(async move {
         debug!(url = %url, event_type = %event.event_type, "sending upstream webhook");
-        match client
-            .post(&url)
-            .json(&event)
-            .send()
-            .await
-        {
+        match client.post(&url).json(&event).send().await {
             Ok(resp) => {
                 if !resp.status().is_success() {
                     warn!(

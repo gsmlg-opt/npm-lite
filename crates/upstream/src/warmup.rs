@@ -71,7 +71,11 @@ pub async fn warm_stale_entries(
     }
 
     if refreshed > 0 {
-        info!(refreshed, total_stale = entries.len(), "cache warmup pass completed");
+        info!(
+            refreshed,
+            total_stale = entries.len(),
+            "cache warmup pass completed"
+        );
     }
 
     refreshed

@@ -58,8 +58,7 @@ async fn build_packument(state: &AppState, package_name: &str) -> Result<Json<Va
 
             // Attempt to merge with upstream if configured and the route allows.
             if let Some(upstream) = &state.upstream {
-                let route =
-                    npm_upstream::resolve_upstream(upstream.config(), package_name);
+                let route = npm_upstream::resolve_upstream(upstream.config(), package_name);
                 if let npm_upstream::RouteTarget::Upstream(upstream_url) = route
                     && let Some(mut upstream_packument) =
                         try_fetch_upstream_for_merge(state, package_name, &upstream_url).await
@@ -149,13 +148,11 @@ async fn build_local_packument(
 }
 
 /// Attempt to fetch a packument from the configured upstream registry.
-async fn fetch_upstream_packument(
-    state: &AppState,
-    package_name: &str,
-) -> Result<Json<Value>> {
-    let upstream = state.upstream.as_ref().ok_or_else(|| {
-        RegistryError::NotFound(format!("package '{}' not found", package_name))
-    })?;
+async fn fetch_upstream_packument(state: &AppState, package_name: &str) -> Result<Json<Value>> {
+    let upstream = state
+        .upstream
+        .as_ref()
+        .ok_or_else(|| RegistryError::NotFound(format!("package '{}' not found", package_name)))?;
 
     // Use the routing system to determine which upstream to use.
     let route = npm_upstream::resolve_upstream(upstream.config(), package_name);
@@ -219,10 +216,7 @@ async fn fetch_upstream_packument(
             }
 
             // Rewrite tarball URLs so the client fetches tarballs through this registry.
-            npm_upstream::proxy::rewrite_tarball_urls(
-                &mut packument,
-                &state.config.registry_url,
-            );
+            npm_upstream::proxy::rewrite_tarball_urls(&mut packument, &state.config.registry_url);
             Ok(Json(packument))
         }
         Err(e) => {
@@ -235,19 +229,19 @@ async fn fetch_upstream_packument(
                     true, // allow stale
                 )
                 .await
-                {
-                    tracing::warn!(
-                        package = %package_name,
-                        error = %e,
-                        "upstream failed, serving stale cache"
-                    );
-                    let mut packument = cached;
-                    npm_upstream::proxy::rewrite_tarball_urls(
-                        &mut packument,
-                        &state.config.registry_url,
-                    );
-                    return Ok(Json(packument));
-                }
+            {
+                tracing::warn!(
+                    package = %package_name,
+                    error = %e,
+                    "upstream failed, serving stale cache"
+                );
+                let mut packument = cached;
+                npm_upstream::proxy::rewrite_tarball_urls(
+                    &mut packument,
+                    &state.config.registry_url,
+                );
+                return Ok(Json(packument));
+            }
             Err(upstream_error_to_registry(e, package_name))
         }
     }
@@ -273,7 +267,10 @@ async fn try_fetch_upstream_for_merge(
     }
 
     // Fetch from upstream — best-effort, don't fail the request.
-    match upstream.fetch_packument_from(package_name, upstream_url).await {
+    match upstream
+        .fetch_packument_from(package_name, upstream_url)
+        .await
+    {
         Ok(packument) => {
             if config.cache_enabled {
                 npm_upstream::put_cached_packument(
@@ -316,9 +313,7 @@ fn merge_packuments(local: Value, upstream: Value) -> Value {
 
     // Merge versions: add upstream versions that don't exist locally.
     if let (Some(local_versions), Some(upstream_versions)) = (
-        merged
-            .get_mut("versions")
-            .and_then(|v| v.as_object_mut()),
+        merged.get_mut("versions").and_then(|v| v.as_object_mut()),
         upstream.get("versions").and_then(|v| v.as_object()),
     ) {
         for (version, meta) in upstream_versions {
@@ -330,9 +325,7 @@ fn merge_packuments(local: Value, upstream: Value) -> Value {
 
     // Merge dist-tags: upstream tags are included only if not already in local.
     if let (Some(local_tags), Some(upstream_tags)) = (
-        merged
-            .get_mut("dist-tags")
-            .and_then(|v| v.as_object_mut()),
+        merged.get_mut("dist-tags").and_then(|v| v.as_object_mut()),
         upstream.get("dist-tags").and_then(|v| v.as_object()),
     ) {
         for (tag, version) in upstream_tags {

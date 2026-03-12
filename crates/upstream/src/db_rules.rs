@@ -2,9 +2,7 @@
 
 use chrono::Utc;
 use npm_entity::upstream_configs;
-use sea_orm::{
-    ActiveModelTrait, DatabaseConnection, EntityTrait, Order, QueryOrder, Set,
-};
+use sea_orm::{ActiveModelTrait, DatabaseConnection, EntityTrait, Order, QueryOrder, Set};
 use uuid::Uuid;
 
 use crate::config::{PatternRule, UpstreamConfig};

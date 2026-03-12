@@ -30,11 +30,7 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .unique_key(),
                     )
-                    .col(
-                        ColumnDef::new(UpstreamCache::UpstreamUrl)
-                            .text()
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(UpstreamCache::UpstreamUrl).text().not_null())
                     .col(
                         ColumnDef::new(UpstreamCache::PackumentJson)
                             .json()

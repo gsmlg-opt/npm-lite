@@ -78,9 +78,7 @@ impl UpstreamConfig {
     /// Load upstream configuration from environment variables, optionally
     /// overlaying settings from a TOML configuration file.
     pub fn from_env() -> Self {
-        let upstream_url = env::var("UPSTREAM_URL")
-            .ok()
-            .filter(|s| !s.is_empty());
+        let upstream_url = env::var("UPSTREAM_URL").ok().filter(|s| !s.is_empty());
 
         let timeout_secs: u64 = env::var("UPSTREAM_TIMEOUT_SECS")
             .ok()
@@ -116,22 +114,23 @@ impl UpstreamConfig {
 
         // Overlay TOML config if path is specified.
         if let Ok(path) = env::var("UPSTREAM_CONFIG_PATH")
-            && !path.is_empty() {
-                match std::fs::read_to_string(&path) {
-                    Ok(contents) => match toml::from_str::<TomlConfig>(&contents) {
-                        Ok(toml_cfg) => {
-                            config.apply_toml(toml_cfg);
-                            info!(path = %path, "loaded upstream TOML config");
-                        }
-                        Err(e) => {
-                            warn!(path = %path, error = %e, "failed to parse upstream TOML config");
-                        }
-                    },
-                    Err(e) => {
-                        warn!(path = %path, error = %e, "failed to read upstream TOML config");
+            && !path.is_empty()
+        {
+            match std::fs::read_to_string(&path) {
+                Ok(contents) => match toml::from_str::<TomlConfig>(&contents) {
+                    Ok(toml_cfg) => {
+                        config.apply_toml(toml_cfg);
+                        info!(path = %path, "loaded upstream TOML config");
                     }
+                    Err(e) => {
+                        warn!(path = %path, error = %e, "failed to parse upstream TOML config");
+                    }
+                },
+                Err(e) => {
+                    warn!(path = %path, error = %e, "failed to read upstream TOML config");
                 }
             }
+        }
 
         config
     }

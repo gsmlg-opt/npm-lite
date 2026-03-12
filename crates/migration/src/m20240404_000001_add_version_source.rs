@@ -31,11 +31,7 @@ impl MigrationTrait for Migration {
             .alter_table(
                 Table::alter()
                     .table(PackageVersions::Table)
-                    .add_column(
-                        ColumnDef::new(PackageVersions::UpstreamUrl)
-                            .text()
-                            .null(),
-                    )
+                    .add_column(ColumnDef::new(PackageVersions::UpstreamUrl).text().null())
                     .to_owned(),
             )
             .await?;

@@ -55,8 +55,7 @@ pub async fn get_cached_packument(
         .ok()
         .flatten()?;
 
-    let age = Utc::now()
-        .signed_duration_since(entry.fetched_at.with_timezone(&Utc));
+    let age = Utc::now().signed_duration_since(entry.fetched_at.with_timezone(&Utc));
     let ttl_chrono = chrono::Duration::from_std(ttl).unwrap_or(chrono::Duration::seconds(300));
 
     if age <= ttl_chrono {
@@ -133,17 +132,13 @@ pub async fn delete_cached_packument(
 }
 
 /// Delete all cached packuments from the database.
-pub async fn delete_all_cached_packuments(
-    db: &DatabaseConnection,
-) -> Result<u64, sea_orm::DbErr> {
+pub async fn delete_all_cached_packuments(db: &DatabaseConnection) -> Result<u64, sea_orm::DbErr> {
     let result = upstream_cache::Entity::delete_many().exec(db).await?;
     Ok(result.rows_affected)
 }
 
 /// Count the number of cached packuments.
-pub async fn count_cached_packuments(
-    db: &DatabaseConnection,
-) -> Result<u64, sea_orm::DbErr> {
+pub async fn count_cached_packuments(db: &DatabaseConnection) -> Result<u64, sea_orm::DbErr> {
     upstream_cache::Entity::find().count(db).await
 }
 

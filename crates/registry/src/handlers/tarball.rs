@@ -67,19 +67,19 @@ async fn do_stream(
     let cache_key = npm_upstream::upstream_tarball_s3_key(package_name, version);
     if let Some(upstream) = &state.upstream
         && upstream.config().cache_enabled
-            && let Some(meta) = state
-                .storage
-                .head_object(&cache_key)
-                .await
-                .map_err(RegistryError::Storage)?
-            {
-                debug!(
-                    package = %package_name,
-                    version = %version,
-                    "serving cached upstream tarball from S3"
-                );
-                return stream_from_s3(&state, &cache_key, meta.size, filename).await;
-            }
+        && let Some(meta) = state
+            .storage
+            .head_object(&cache_key)
+            .await
+            .map_err(RegistryError::Storage)?
+    {
+        debug!(
+            package = %package_name,
+            version = %version,
+            "serving cached upstream tarball from S3"
+        );
+        return stream_from_s3(&state, &cache_key, meta.size, filename).await;
+    }
 
     // Not found locally or in cache — try upstream.
     stream_from_upstream(&state, package_name, version, filename).await
@@ -155,15 +155,13 @@ async fn stream_from_upstream(
         .await
         .map_err(|e| super::packument::upstream_error_to_registry(e, package_name))?;
 
-    let tarball_url =
-        npm_upstream::proxy::extract_upstream_tarball_url(&packument, version).ok_or_else(
-            || {
-                RegistryError::NotFound(format!(
-                    "version '{}' of package '{}' not found on upstream",
-                    version, package_name
-                ))
-            },
-        )?;
+    let tarball_url = npm_upstream::proxy::extract_upstream_tarball_url(&packument, version)
+        .ok_or_else(|| {
+            RegistryError::NotFound(format!(
+                "version '{}' of package '{}' not found on upstream",
+                version, package_name
+            ))
+        })?;
 
     // Extract integrity hashes from the packument for verification.
     let (expected_shasum, expected_integrity) =
@@ -211,10 +209,7 @@ async fn stream_from_upstream(
                     .header(header::CONTENT_TYPE, "application/octet-stream")
                     .header(
                         header::CONTENT_DISPOSITION,
-                        format!(
-                            "attachment; filename=\"{}\"",
-                            sanitize_filename(filename)
-                        ),
+                        format!("attachment; filename=\"{}\"", sanitize_filename(filename)),
                     )
                     .header(header::CONTENT_LENGTH, data_len.to_string())
                     .body(Body::from(data))

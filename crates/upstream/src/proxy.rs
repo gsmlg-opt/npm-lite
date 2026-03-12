@@ -26,10 +26,9 @@ pub fn rewrite_tarball_urls(packument: &mut Value, registry_url: &str) {
                 rewritten = %rewritten,
                 "rewrote tarball URL"
             );
-            dist.as_object_mut().unwrap().insert(
-                "tarball".to_string(),
-                Value::String(rewritten),
-            );
+            dist.as_object_mut()
+                .unwrap()
+                .insert("tarball".to_string(), Value::String(rewritten));
         }
     }
 }
@@ -54,10 +53,7 @@ fn rewrite_single_url(tarball_url: &str, registry_base: &str) -> Option<String> 
 ///
 /// This is used when the client requests a tarball — we look up the original
 /// upstream URL in the packument so we know where to stream from.
-pub fn extract_upstream_tarball_url(
-    packument: &Value,
-    version: &str,
-) -> Option<String> {
+pub fn extract_upstream_tarball_url(packument: &Value, version: &str) -> Option<String> {
     packument
         .get("versions")?
         .get(version)?
@@ -170,11 +166,15 @@ mod tests {
         rewrite_tarball_urls(&mut packument, "https://my-reg.com");
 
         assert_eq!(
-            packument["versions"]["4.17.20"]["dist"]["tarball"].as_str().unwrap(),
+            packument["versions"]["4.17.20"]["dist"]["tarball"]
+                .as_str()
+                .unwrap(),
             "https://my-reg.com/lodash/-/lodash-4.17.20.tgz"
         );
         assert_eq!(
-            packument["versions"]["4.17.21"]["dist"]["tarball"].as_str().unwrap(),
+            packument["versions"]["4.17.21"]["dist"]["tarball"]
+                .as_str()
+                .unwrap(),
             "https://my-reg.com/lodash/-/lodash-4.17.21.tgz"
         );
     }
@@ -194,7 +194,9 @@ mod tests {
 
         rewrite_tarball_urls(&mut packument, "https://my-reg.com/");
 
-        let tarball = packument["versions"]["1.0.0"]["dist"]["tarball"].as_str().unwrap();
+        let tarball = packument["versions"]["1.0.0"]["dist"]["tarball"]
+            .as_str()
+            .unwrap();
         assert_eq!(tarball, "https://my-reg.com/pkg/-/pkg-1.0.0.tgz");
     }
 

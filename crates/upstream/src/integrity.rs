@@ -35,19 +35,19 @@ pub fn verify_tarball_integrity(
     if let Some(expected) = expected_integrity
         && let Some(expected_b64) = expected.strip_prefix("sha512-")
     {
-            let mut hasher = Sha512::new();
-            hasher.update(data);
-            let actual_bytes = hasher.finalize();
-            use base64::Engine;
-            let actual_b64 = base64::engine::general_purpose::STANDARD.encode(actual_bytes);
-            if actual_b64 != expected_b64 {
-                warn!(
-                    expected_integrity = %expected,
-                    "tarball integrity mismatch (sha512)"
-                );
-                return false;
-            }
-            debug!("tarball integrity verified (sha512)");
+        let mut hasher = Sha512::new();
+        hasher.update(data);
+        let actual_bytes = hasher.finalize();
+        use base64::Engine;
+        let actual_b64 = base64::engine::general_purpose::STANDARD.encode(actual_bytes);
+        if actual_b64 != expected_b64 {
+            warn!(
+                expected_integrity = %expected,
+                "tarball integrity mismatch (sha512)"
+            );
+            return false;
+        }
+        debug!("tarball integrity verified (sha512)");
     }
     // If integrity uses an algorithm we don't support, skip verification
     // rather than failing.

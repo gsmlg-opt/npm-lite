@@ -92,10 +92,18 @@ pub async fn update_config(
 
     let mut changed = Vec::new();
 
-    if input.get("cache_enabled").and_then(|v| v.as_bool()).is_some() {
+    if input
+        .get("cache_enabled")
+        .and_then(|v| v.as_bool())
+        .is_some()
+    {
         changed.push("cache_enabled");
     }
-    if input.get("cache_ttl_secs").and_then(|v| v.as_u64()).is_some() {
+    if input
+        .get("cache_ttl_secs")
+        .and_then(|v| v.as_u64())
+        .is_some()
+    {
         changed.push("cache_ttl_secs");
     }
     if input.get("timeout_secs").and_then(|v| v.as_u64()).is_some() {
