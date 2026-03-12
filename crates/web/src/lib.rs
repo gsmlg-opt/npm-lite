@@ -9,7 +9,7 @@ pub use state::AppState;
 use axum::{
     Router,
     middleware::from_fn_with_state,
-    routing::{get, post},
+    routing::{delete, get, post, put},
 };
 
 use pages::{
@@ -24,6 +24,7 @@ use pages::{
     teams::{team_add_member, team_create, team_detail_page, team_list_page, team_remove_member},
     tokens::{token_create, token_list_page, token_revoke},
     upstream::{purge_cache, upstream_page},
+    upstream_api,
     users::{user_create, user_list_page},
 };
 
@@ -65,9 +66,27 @@ pub fn web_router(state: AppState) -> Router<AppState> {
         .route("/users", get(user_list_page).post(user_create))
         // Settings
         .route("/settings", get(settings_page))
-        // Upstream
+        // Upstream (UI)
         .route("/upstream", get(upstream_page))
         .route("/upstream/purge-cache", post(purge_cache))
+        // Upstream API
+        .route("/api/upstream/config", get(upstream_api::get_config))
+        .route(
+            "/api/upstream/rules",
+            get(upstream_api::list_rules).post(upstream_api::create_rule),
+        )
+        .route(
+            "/api/upstream/rules/{id}",
+            put(upstream_api::update_rule).delete(upstream_api::delete_rule),
+        )
+        .route(
+            "/api/upstream/cache",
+            delete(upstream_api::purge_all_cache),
+        )
+        .route(
+            "/api/upstream/cache/{package}",
+            delete(upstream_api::purge_package_cache),
+        )
         // Activity log
         .route("/activity", get(activity_page))
         .layer(from_fn_with_state(state, middleware::require_admin_session));

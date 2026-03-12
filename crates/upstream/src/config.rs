@@ -30,6 +30,10 @@ pub struct UpstreamConfig {
 
     /// Pattern-based routing rules (regex → upstream URL). Evaluated in order.
     pub pattern_rules: Vec<PatternRule>,
+
+    /// Auth token references keyed by upstream URL.
+    /// Values are `env:VAR_NAME` references or inline tokens.
+    pub auth_token_refs: HashMap<String, String>,
 }
 
 /// A regex-based routing rule.
@@ -98,6 +102,7 @@ impl UpstreamConfig {
             scope_rules: HashMap::new(),
             local_scopes: Vec::new(),
             pattern_rules: Vec::new(),
+            auth_token_refs: HashMap::new(),
         };
 
         // Overlay TOML config if path is specified.
@@ -160,6 +165,37 @@ impl UpstreamConfig {
     pub fn is_enabled(&self) -> bool {
         self.upstream_url.is_some()
     }
+
+    /// Resolve auth token references to actual token values.
+    ///
+    /// References of the form `env:VAR_NAME` are resolved from environment
+    /// variables. Inline tokens are used as-is.
+    pub fn resolve_auth_tokens(&self) -> HashMap<String, String> {
+        let mut tokens = HashMap::new();
+        for (url, token_ref) in &self.auth_token_refs {
+            let resolved = resolve_token_ref(token_ref);
+            if let Some(token) = resolved {
+                let normalized = url.trim_end_matches('/').to_string();
+                tokens.insert(normalized, token);
+            }
+        }
+        tokens
+    }
+}
+
+/// Resolve a token reference. `env:VAR_NAME` → reads env var, otherwise inline.
+fn resolve_token_ref(token_ref: &str) -> Option<String> {
+    if let Some(var_name) = token_ref.strip_prefix("env:") {
+        match env::var(var_name) {
+            Ok(val) if !val.is_empty() => Some(val),
+            _ => {
+                warn!(var = %var_name, "auth token env var not set or empty");
+                None
+            }
+        }
+    } else {
+        Some(token_ref.to_string())
+    }
 }
 
 #[cfg(test)]
@@ -176,6 +212,7 @@ mod tests {
             scope_rules: HashMap::new(),
             local_scopes: Vec::new(),
             pattern_rules: Vec::new(),
+            auth_token_refs: HashMap::new(),
         };
         assert!(!config.is_enabled());
     }
@@ -190,6 +227,7 @@ mod tests {
             scope_rules: HashMap::new(),
             local_scopes: Vec::new(),
             pattern_rules: Vec::new(),
+            auth_token_refs: HashMap::new(),
         };
         assert!(config.is_enabled());
     }
@@ -204,6 +242,7 @@ mod tests {
             scope_rules: HashMap::new(),
             local_scopes: Vec::new(),
             pattern_rules: Vec::new(),
+            auth_token_refs: HashMap::new(),
         };
         assert_eq!(config.timeout, Duration::from_secs(30));
     }
@@ -218,6 +257,7 @@ mod tests {
             scope_rules: HashMap::new(),
             local_scopes: Vec::new(),
             pattern_rules: Vec::new(),
+            auth_token_refs: HashMap::new(),
         };
 
         let toml_str = r#"
@@ -259,6 +299,7 @@ mod tests {
             scope_rules: HashMap::new(),
             local_scopes: Vec::new(),
             pattern_rules: Vec::new(),
+            auth_token_refs: HashMap::new(),
         };
 
         let toml_str = r#"
@@ -286,6 +327,7 @@ mod tests {
             scope_rules: HashMap::new(),
             local_scopes: Vec::new(),
             pattern_rules: Vec::new(),
+            auth_token_refs: HashMap::new(),
         };
 
         let toml_str = r#"

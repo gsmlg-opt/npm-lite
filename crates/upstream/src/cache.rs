@@ -10,9 +10,32 @@ use sea_orm::{
     Set,
 };
 use serde_json::Value;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use tracing::{debug, warn};
 use uuid::Uuid;
+
+/// Global cache statistics counters.
+static CACHE_HITS: AtomicU64 = AtomicU64::new(0);
+static CACHE_MISSES: AtomicU64 = AtomicU64::new(0);
+static CACHE_STALE_HITS: AtomicU64 = AtomicU64::new(0);
+
+/// Cache statistics snapshot.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct CacheStats {
+    pub hits: u64,
+    pub misses: u64,
+    pub stale_hits: u64,
+}
+
+/// Get current cache statistics.
+pub fn cache_stats() -> CacheStats {
+    CacheStats {
+        hits: CACHE_HITS.load(Ordering::Relaxed),
+        misses: CACHE_MISSES.load(Ordering::Relaxed),
+        stale_hits: CACHE_STALE_HITS.load(Ordering::Relaxed),
+    }
+}
 
 /// Read a cached packument from the database.
 ///
@@ -37,12 +60,15 @@ pub async fn get_cached_packument(
     let ttl_chrono = chrono::Duration::from_std(ttl).unwrap_or(chrono::Duration::seconds(300));
 
     if age <= ttl_chrono {
+        CACHE_HITS.fetch_add(1, Ordering::Relaxed);
         debug!(package = %package_name, "upstream cache hit (fresh)");
         Some(entry.packument_json)
     } else if allow_stale {
+        CACHE_STALE_HITS.fetch_add(1, Ordering::Relaxed);
         debug!(package = %package_name, age_secs = age.num_seconds(), "upstream cache hit (stale, serving anyway)");
         Some(entry.packument_json)
     } else {
+        CACHE_MISSES.fetch_add(1, Ordering::Relaxed);
         debug!(package = %package_name, age_secs = age.num_seconds(), "upstream cache expired");
         None
     }

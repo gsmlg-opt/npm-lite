@@ -53,7 +53,26 @@ async fn build_packument(state: &AppState, package_name: &str) -> Result<Json<Va
         .await?;
 
     match pkg {
-        Some(pkg) => build_local_packument(state, package_name, pkg).await,
+        Some(pkg) => {
+            let local = build_local_packument(state, package_name, pkg).await?;
+
+            // Attempt to merge with upstream if configured and the route allows.
+            if let Some(upstream) = &state.upstream {
+                let route =
+                    npm_upstream::resolve_upstream(upstream.config(), package_name);
+                if let npm_upstream::RouteTarget::Upstream(upstream_url) = route
+                    && let Some(mut upstream_packument) =
+                        try_fetch_upstream_for_merge(state, package_name, &upstream_url).await
+                {
+                    npm_upstream::proxy::rewrite_tarball_urls(
+                        &mut upstream_packument,
+                        &state.config.registry_url,
+                    );
+                    return Ok(Json(merge_packuments(local.0, upstream_packument)));
+                }
+            }
+            Ok(local)
+        }
         None => {
             // Package not found locally — try upstream if configured.
             fetch_upstream_packument(state, package_name).await
@@ -223,6 +242,90 @@ async fn fetch_upstream_packument(
             Err(upstream_error_to_registry(e, package_name))
         }
     }
+}
+
+/// Best-effort fetch of upstream packument for merging with local.
+/// Returns `None` on any failure (we already have a local packument to serve).
+async fn try_fetch_upstream_for_merge(
+    state: &AppState,
+    package_name: &str,
+    upstream_url: &str,
+) -> Option<Value> {
+    let upstream = state.upstream.as_ref()?;
+    let config = upstream.config();
+
+    // Check cache first.
+    if config.cache_enabled
+        && let Some(cached) =
+            npm_upstream::get_cached_packument(&state.db, package_name, config.cache_ttl, true)
+                .await
+    {
+        return Some(cached);
+    }
+
+    // Fetch from upstream — best-effort, don't fail the request.
+    match upstream.fetch_packument_from(package_name, upstream_url).await {
+        Ok(packument) => {
+            if config.cache_enabled {
+                npm_upstream::put_cached_packument(
+                    &state.db,
+                    package_name,
+                    upstream_url,
+                    &packument,
+                )
+                .await;
+            }
+            Some(packument)
+        }
+        Err(e) => {
+            debug!(
+                package = %package_name,
+                error = %e,
+                "could not fetch upstream for merge, serving local-only"
+            );
+            None
+        }
+    }
+}
+
+/// Merge a local packument with an upstream packument.
+///
+/// Per PRD §4.1:
+/// - Local versions are included as-is
+/// - Upstream versions are included only if no local version with the same version string exists
+/// - Dist-tags from local always override upstream dist-tags
+fn merge_packuments(local: Value, upstream: Value) -> Value {
+    let mut merged = local;
+
+    // Merge versions: add upstream versions that don't exist locally.
+    if let (Some(local_versions), Some(upstream_versions)) = (
+        merged
+            .get_mut("versions")
+            .and_then(|v| v.as_object_mut()),
+        upstream.get("versions").and_then(|v| v.as_object()),
+    ) {
+        for (version, meta) in upstream_versions {
+            if !local_versions.contains_key(version) {
+                local_versions.insert(version.clone(), meta.clone());
+            }
+        }
+    }
+
+    // Merge dist-tags: upstream tags are included only if not already in local.
+    if let (Some(local_tags), Some(upstream_tags)) = (
+        merged
+            .get_mut("dist-tags")
+            .and_then(|v| v.as_object_mut()),
+        upstream.get("dist-tags").and_then(|v| v.as_object()),
+    ) {
+        for (tag, version) in upstream_tags {
+            if !local_tags.contains_key(tag) {
+                local_tags.insert(tag.clone(), version.clone());
+            }
+        }
+    }
+
+    merged
 }
 
 /// Map upstream errors to appropriate HTTP status codes per PRD section 4.4.

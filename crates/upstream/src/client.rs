@@ -3,6 +3,7 @@
 use bytes::Bytes;
 use futures::Stream;
 use reqwest::Client;
+use std::collections::HashMap;
 use std::pin::Pin;
 use tracing::{debug, warn};
 
@@ -14,6 +15,9 @@ use crate::error::UpstreamError;
 pub struct UpstreamClient {
     client: Client,
     config: UpstreamConfig,
+    /// Auth tokens resolved for specific upstream URLs.
+    /// Map of upstream URL → bearer token.
+    auth_tokens: HashMap<String, String>,
 }
 
 impl UpstreamClient {
@@ -26,12 +30,29 @@ impl UpstreamClient {
             .build()
             .map_err(UpstreamError::Request)?;
 
-        Ok(Self { client, config })
+        // Pre-resolve auth tokens from scope_auth_tokens config.
+        let auth_tokens = config.resolve_auth_tokens();
+
+        Ok(Self {
+            client,
+            config,
+            auth_tokens,
+        })
     }
 
     /// Returns a reference to the upstream configuration.
     pub fn config(&self) -> &UpstreamConfig {
         &self.config
+    }
+
+    /// Returns a mutable reference to the upstream configuration.
+    pub fn config_mut(&mut self) -> &mut UpstreamConfig {
+        &mut self.config
+    }
+
+    /// Update auth tokens (e.g. after loading DB rules).
+    pub fn refresh_auth_tokens(&mut self) {
+        self.auth_tokens = self.config.resolve_auth_tokens();
     }
 
     /// Returns the configured global upstream URL, or `Err(NoUpstream)` if none.
@@ -40,6 +61,14 @@ impl UpstreamClient {
             .upstream_url
             .as_deref()
             .ok_or(UpstreamError::NoUpstream)
+    }
+
+    /// Look up the auth token for a given upstream URL, if any.
+    fn auth_token_for(&self, upstream_url: &str) -> Option<&str> {
+        let normalized = upstream_url.trim_end_matches('/');
+        self.auth_tokens
+            .get(normalized)
+            .map(|s| s.as_str())
     }
 
     /// Fetch a packument (package metadata JSON) from the default upstream.
@@ -65,10 +94,17 @@ impl UpstreamClient {
 
         debug!(url = %url, "fetching packument from upstream");
 
-        let resp = self
+        let mut req = self
             .client
             .get(&url)
-            .header("Accept", "application/json")
+            .header("Accept", "application/json");
+
+        // Attach auth token if configured for this upstream.
+        if let Some(token) = self.auth_token_for(upstream_url) {
+            req = req.bearer_auth(token);
+        }
+
+        let resp = req
             .send()
             .await
             .map_err(|e| {
@@ -126,9 +162,17 @@ impl UpstreamClient {
     > {
         debug!(url = %tarball_url, "streaming tarball from upstream");
 
-        let resp = self
-            .client
-            .get(tarball_url)
+        let mut req = self.client.get(tarball_url);
+
+        // Derive the upstream base URL from the tarball URL for auth lookup.
+        if let Ok(parsed) = url::Url::parse(tarball_url) {
+            let base = format!("{}://{}", parsed.scheme(), parsed.host_str().unwrap_or(""));
+            if let Some(token) = self.auth_token_for(&base) {
+                req = req.bearer_auth(token);
+            }
+        }
+
+        let resp = req
             .send()
             .await
             .map_err(|e| {
@@ -170,9 +214,16 @@ impl UpstreamClient {
     ) -> Result<Bytes, UpstreamError> {
         debug!(url = %tarball_url, "downloading tarball from upstream for caching");
 
-        let resp = self
-            .client
-            .get(tarball_url)
+        let mut req = self.client.get(tarball_url);
+
+        if let Ok(parsed) = url::Url::parse(tarball_url) {
+            let base = format!("{}://{}", parsed.scheme(), parsed.host_str().unwrap_or(""));
+            if let Some(token) = self.auth_token_for(&base) {
+                req = req.bearer_auth(token);
+            }
+        }
+
+        let resp = req
             .send()
             .await
             .map_err(|e| {

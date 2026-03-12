@@ -7,4 +7,5 @@ pub mod team_members;
 pub mod teams;
 pub mod tokens;
 pub mod upstream_cache;
+pub mod upstream_configs;
 pub mod users;

@@ -109,6 +109,7 @@ mod tests {
             scope_rules: HashMap::new(),
             local_scopes: Vec::new(),
             pattern_rules: Vec::new(),
+            auth_token_refs: HashMap::new(),
         }
     }
 
@@ -189,6 +190,7 @@ mod tests {
             scope_rules: HashMap::new(),
             local_scopes: Vec::new(),
             pattern_rules: Vec::new(),
+            auth_token_refs: HashMap::new(),
         };
 
         assert_eq!(resolve(&config, "express"), RouteTarget::None);

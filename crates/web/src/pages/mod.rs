@@ -7,4 +7,5 @@ pub mod settings;
 pub mod teams;
 pub mod tokens;
 pub mod upstream;
+pub mod upstream_api;
 pub mod users;

@@ -2374,15 +2374,19 @@ dependencies = [
 name = "npm-upstream"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "bytes",
  "chrono",
  "futures",
+ "hex",
  "npm-entity",
  "regex",
  "reqwest",
  "sea-orm",
  "serde",
  "serde_json",
+ "sha1",
+ "sha2",
  "thiserror",
  "tokio",
  "toml",
@@ -2403,6 +2407,7 @@ dependencies = [
  "npm-entity",
  "npm-registry",
  "npm-upstream",
+ "regex",
  "sea-orm",
  "serde",
  "serde_json",

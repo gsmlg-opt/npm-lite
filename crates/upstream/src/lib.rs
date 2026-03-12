@@ -8,15 +8,22 @@
 pub mod cache;
 pub mod client;
 pub mod config;
+pub mod db_rules;
 pub mod error;
+pub mod integrity;
 pub mod proxy;
 pub mod router;
 
 pub use cache::{
-    count_cached_packuments, delete_all_cached_packuments, delete_cached_packument,
-    get_cached_packument, put_cached_packument, upstream_tarball_s3_key,
+    CacheStats, cache_stats, count_cached_packuments, delete_all_cached_packuments,
+    delete_cached_packument, get_cached_packument, put_cached_packument, upstream_tarball_s3_key,
 };
 pub use client::UpstreamClient;
 pub use config::UpstreamConfig;
+pub use db_rules::{
+    UpstreamRule, RuleInput, apply_db_rules, create_rule, delete_rule, get_rule, list_rules,
+    update_rule,
+};
 pub use error::UpstreamError;
+pub use integrity::verify_tarball_integrity;
 pub use router::{RouteTarget, resolve as resolve_upstream};

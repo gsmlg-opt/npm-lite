@@ -165,11 +165,31 @@ async fn stream_from_upstream(
             },
         )?;
 
-    // If caching is enabled, download the full tarball, cache to S3, then serve from memory.
+    // Extract integrity hashes from the packument for verification.
+    let (expected_shasum, expected_integrity) =
+        npm_upstream::integrity::extract_version_hashes(&packument, version);
+
+    // If caching is enabled, download the full tarball, verify, cache to S3, then serve.
     let config = upstream.config();
     if config.cache_enabled {
         match upstream.download_tarball(&tarball_url).await {
             Ok(data) => {
+                // Verify tarball integrity before caching.
+                if !npm_upstream::verify_tarball_integrity(
+                    &data,
+                    expected_shasum.as_deref(),
+                    expected_integrity.as_deref(),
+                ) {
+                    tracing::error!(
+                        package = %package_name,
+                        version = %version,
+                        "tarball integrity verification failed, not caching"
+                    );
+                    return Err(RegistryError::BadGateway(
+                        "upstream tarball integrity verification failed".to_string(),
+                    ));
+                }
+
                 let cache_key = npm_upstream::upstream_tarball_s3_key(package_name, version);
                 let data_len = data.len();
 

@@ -20,3 +20,4 @@ tracing = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
 tower = { workspace = true }
+regex = "1"

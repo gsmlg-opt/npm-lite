@@ -80,7 +80,21 @@ async fn main() -> anyhow::Result<()> {
     info!(bucket = %cfg.s3_bucket, "S3 storage initialised");
 
     // ── Build upstream proxy client (if configured) ─────────────────────
-    let upstream_config = npm_upstream::UpstreamConfig::from_env();
+    let mut upstream_config = npm_upstream::UpstreamConfig::from_env();
+
+    // Load DB-stored routing rules and merge them into the config.
+    match npm_upstream::list_rules(&db).await {
+        Ok(db_rules) => {
+            if !db_rules.is_empty() {
+                info!(count = db_rules.len(), "loaded upstream rules from database");
+                npm_upstream::apply_db_rules(&mut upstream_config, &db_rules);
+            }
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "failed to load upstream rules from database");
+        }
+    }
+
     let upstream = if upstream_config.is_enabled() {
         info!(
             upstream_url = %upstream_config.upstream_url.as_deref().unwrap_or(""),
