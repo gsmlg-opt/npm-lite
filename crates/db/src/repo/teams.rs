@@ -1,6 +1,5 @@
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, EntityTrait,
-    QueryFilter,
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter,
 };
 use uuid::Uuid;
 
@@ -13,10 +12,7 @@ pub struct TeamRepo;
 
 impl TeamRepo {
     /// Find a team by name.
-    pub async fn find_by_name(
-        db: &DatabaseConnection,
-        name: &str,
-    ) -> Result<Option<teams::Model>> {
+    pub async fn find_by_name(db: &DatabaseConnection, name: &str) -> Result<Option<teams::Model>> {
         let model = TeamEntity::find()
             .filter(Column::Name.eq(name))
             .one(db)

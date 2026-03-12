@@ -1,7 +1,7 @@
 use axum::{
+    Form,
     extract::{Path, State},
     response::{Html, Redirect},
-    Form,
 };
 use sea_orm::{EntityTrait, QueryOrder};
 use serde::Deserialize;
@@ -59,7 +59,7 @@ pub async fn access_page(State(state): State<AppState>) -> WebResult<Html<String
             let scope_display = acl
                 .scope
                 .as_deref()
-                .map(|s| html_escape(s))
+                .map(html_escape)
                 .unwrap_or_else(|| "\u{2014}".to_string());
 
             let grantee = if let Some(uid) = acl.user_id {
@@ -123,17 +123,16 @@ pub async fn access_page(State(state): State<AppState>) -> WebResult<Html<String
     };
 
     // Package options for dropdown
-    let package_options: String = std::iter::once(
-        r#"<option value="">All packages</option>"#.to_string(),
-    )
-    .chain(all_packages.iter().map(|p| {
-        format!(
-            r#"<option value="{id}">{name}</option>"#,
-            id = p.id,
-            name = html_escape(&p.name),
-        )
-    }))
-    .collect();
+    let package_options: String =
+        std::iter::once(r#"<option value="">All packages</option>"#.to_string())
+            .chain(all_packages.iter().map(|p| {
+                format!(
+                    r#"<option value="{id}">{name}</option>"#,
+                    id = p.id,
+                    name = html_escape(&p.name),
+                )
+            }))
+            .collect();
 
     // User options
     let user_options: String = all_users
@@ -264,7 +263,8 @@ pub async fn access_grant(
         (uid, None)
     };
 
-    AclRepo::grant(db, package_id, scope, user_id, team_id, &form.permission).await
+    AclRepo::grant(db, package_id, scope, user_id, team_id, &form.permission)
+        .await
         .map_err(|e| crate::error::WebError::Internal(e.to_string()))?;
 
     Ok(Redirect::to("/admin/access"))
@@ -277,7 +277,8 @@ pub async fn access_revoke(
 ) -> WebResult<Redirect> {
     let db = &state.db;
 
-    AclRepo::revoke(db, id).await
+    AclRepo::revoke(db, id)
+        .await
         .map_err(|e| crate::error::WebError::Internal(e.to_string()))?;
 
     Ok(Redirect::to("/admin/access"))

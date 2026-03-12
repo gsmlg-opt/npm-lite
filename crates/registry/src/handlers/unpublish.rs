@@ -10,9 +10,9 @@
 //! Only users with the `admin` role may call this endpoint.
 
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
-    Json,
 };
 use npm_entity::{dist_tags, package_versions, packages, publish_events};
 use sea_orm::{

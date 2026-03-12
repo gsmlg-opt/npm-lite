@@ -1,8 +1,8 @@
 use argon2::{
-    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
+    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
 };
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
@@ -101,7 +101,10 @@ mod tests {
 
     #[test]
     fn verify_token_wrong_hash() {
-        assert!(!verify_token("token", "0000000000000000000000000000000000000000000000000000000000000000"));
+        assert!(!verify_token(
+            "token",
+            "0000000000000000000000000000000000000000000000000000000000000000"
+        ));
     }
 
     #[test]
@@ -156,7 +159,10 @@ mod tests {
     #[test]
     fn generated_token_url_safe() {
         let t = generate_token();
-        assert!(t.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_'));
+        assert!(
+            t.chars()
+                .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+        );
     }
 
     #[test]

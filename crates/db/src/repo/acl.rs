@@ -1,6 +1,5 @@
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, EntityTrait,
-    QueryFilter,
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter,
 };
 use uuid::Uuid;
 
@@ -46,8 +45,7 @@ impl AclRepo {
 
         // Collect all ACL entries that might apply: direct user entries for
         // this package or scope, or team entries where the user is a member.
-        let mut pkg_or_scope_cond = sea_orm::Condition::any()
-            .add(Column::PackageId.eq(package_id));
+        let mut pkg_or_scope_cond = sea_orm::Condition::any().add(Column::PackageId.eq(package_id));
         if let Some(ref s) = scope {
             pkg_or_scope_cond = pkg_or_scope_cond.add(Column::Scope.eq(s.as_str()));
         }

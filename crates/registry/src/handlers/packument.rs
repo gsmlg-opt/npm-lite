@@ -4,12 +4,12 @@
 //! - `GET /@{scope}/{name}`    – scoped package packument
 
 use axum::{
-    extract::{Path, State},
     Json,
+    extract::{Path, State},
 };
 use npm_entity::{dist_tags, package_versions, packages};
 use sea_orm::{ColumnTrait, EntityTrait, ModelTrait, QueryFilter};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::{
     auth::AuthUser,
@@ -60,10 +60,8 @@ async fn build_packument(state: &AppState, package_name: &str) -> Result<Json<Va
         .await?;
 
     // Fetch dist-tags.
-    let dist_tag_rows: Vec<dist_tags::Model> = pkg
-        .find_related(dist_tags::Entity)
-        .all(&state.db)
-        .await?;
+    let dist_tag_rows: Vec<dist_tags::Model> =
+        pkg.find_related(dist_tags::Entity).all(&state.db).await?;
 
     // Build the versions map: { "1.0.0": { ...version metadata... } }
     let mut versions_map = serde_json::Map::new();
@@ -90,10 +88,8 @@ async fn build_packument(state: &AppState, package_name: &str) -> Result<Json<Va
 
     // Build dist-tags map: { "latest": "1.2.3" }
     // We need version strings, so we build a lookup from version_id -> version string.
-    let version_id_to_str: std::collections::HashMap<uuid::Uuid, String> = versions
-        .iter()
-        .map(|v| (v.id, v.version.clone()))
-        .collect();
+    let version_id_to_str: std::collections::HashMap<uuid::Uuid, String> =
+        versions.iter().map(|v| (v.id, v.version.clone())).collect();
 
     let mut dist_tags_map = serde_json::Map::new();
     for tag_row in &dist_tag_rows {
@@ -126,11 +122,11 @@ fn build_tarball_url(state: &AppState, package_name: &str, version: &str) -> Str
         let slash = rest.find('/').unwrap_or(rest.len());
         let scope = &rest[..slash];
         let name = &rest[slash + 1..];
-        format!(
-            "{}/@{}/{}/-/{}-{}.tgz",
-            base, scope, name, name, version
-        )
+        format!("{}/@{}/{}/-/{}-{}.tgz", base, scope, name, name, version)
     } else {
-        format!("{}/{}/-/{}-{}.tgz", base, package_name, package_name, version)
+        format!(
+            "{}/{}/-/{}-{}.tgz",
+            base, package_name, package_name, version
+        )
     }
 }

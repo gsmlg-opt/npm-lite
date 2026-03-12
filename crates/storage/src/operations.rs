@@ -7,8 +7,8 @@ use futures::Stream;
 use tracing::{debug, instrument};
 
 use crate::{
-    error::{Result, StorageError},
     S3Storage,
+    error::{Result, StorageError},
 };
 
 /// Metadata about an object stored in S3.
@@ -34,9 +34,7 @@ impl S3Storage {
     /// Create an `S3Storage` by loading AWS configuration from the environment
     /// (environment variables, `~/.aws/credentials`, instance metadata, etc.).
     pub async fn from_env(bucket: String) -> Result<Self> {
-        let config = aws_config::defaults(BehaviorVersion::latest())
-            .load()
-            .await;
+        let config = aws_config::defaults(BehaviorVersion::latest()).load().await;
 
         let client = Client::new(&config);
         Ok(Self::new(client, bucket))
@@ -215,7 +213,9 @@ impl S3Storage {
                 let nanos = t.subsec_nanos();
                 DateTime::from_timestamp(secs, nanos)
             })
-            .ok_or_else(|| StorageError::InvalidTimestamp { key: key.to_owned() })?;
+            .ok_or_else(|| StorageError::InvalidTimestamp {
+                key: key.to_owned(),
+            })?;
 
         Ok(Some(ObjectMetadata {
             size,

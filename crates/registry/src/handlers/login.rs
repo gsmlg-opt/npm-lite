@@ -10,14 +10,14 @@
 //! ```
 
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
-    Json,
 };
 use npm_core::auth::{generate_token, hash_token, verify_password};
 use npm_entity::tokens;
-use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter};
 use npm_entity::users;
+use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter};
 use serde::Deserialize;
 use serde_json::json;
 use uuid::Uuid;
@@ -63,11 +63,15 @@ pub async fn login_or_adduser(
         .to_string();
 
     if username.is_empty() {
-        return Err(RegistryError::BadRequest("username must not be empty".to_string()));
+        return Err(RegistryError::BadRequest(
+            "username must not be empty".to_string(),
+        ));
     }
 
     if body.password.is_empty() {
-        return Err(RegistryError::BadRequest("password must not be empty".to_string()));
+        return Err(RegistryError::BadRequest(
+            "password must not be empty".to_string(),
+        ));
     }
 
     // Look up the user.
@@ -76,16 +80,17 @@ pub async fn login_or_adduser(
         .one(&state.db)
         .await?;
 
-    let user = existing_user.ok_or_else(|| {
-        RegistryError::Unauthorized("user not found".to_string())
-    })?;
+    let user =
+        existing_user.ok_or_else(|| RegistryError::Unauthorized("user not found".to_string()))?;
 
     // Verify password.
     let valid = verify_password(&body.password, &user.password_hash)
         .map_err(|e| RegistryError::Internal(e.to_string()))?;
 
     if !valid {
-        return Err(RegistryError::Unauthorized("incorrect password".to_string()));
+        return Err(RegistryError::Unauthorized(
+            "incorrect password".to_string(),
+        ));
     }
 
     let user_id = user.id;

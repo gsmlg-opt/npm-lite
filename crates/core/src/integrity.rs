@@ -1,4 +1,4 @@
-use base64::{engine::general_purpose::STANDARD, Engine as _};
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use sha1::Sha1;
 use sha2::{Digest, Sha256, Sha512};
 // sha1::Digest and sha2::Digest are the same underlying trait (digest::Digest).

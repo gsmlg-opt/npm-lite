@@ -1,9 +1,12 @@
 use axum::{
+    Extension, Form,
     extract::{Path, Query, State},
     response::{Html, Redirect},
-    Extension, Form,
 };
-use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder};
+use sea_orm::{
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter,
+    QueryOrder,
+};
 use serde::Deserialize;
 use tracing::instrument;
 use uuid::Uuid;
@@ -35,9 +38,7 @@ pub async fn package_list_page(
 
     let mut finder = packages::Entity::find();
     if !search.is_empty() {
-        finder = finder.filter(
-            packages::Column::Name.contains(&search),
-        );
+        finder = finder.filter(packages::Column::Name.contains(&search));
     }
     let paginator = finder
         .order_by_asc(packages::Column::Name)
@@ -68,13 +69,14 @@ pub async fn package_list_page(
             let scope = pkg
                 .scope
                 .as_deref()
-                .map(|s| format!(r#"<span class="badge badge-outline badge-sm">{}</span>"#, html_escape(s)))
+                .map(|s| {
+                    format!(
+                        r#"<span class="badge badge-outline badge-sm">{}</span>"#,
+                        html_escape(s)
+                    )
+                })
                 .unwrap_or_default();
-            let desc = pkg
-                .description
-                .as_deref()
-                .unwrap_or("—")
-                .to_string();
+            let desc = pkg.description.as_deref().unwrap_or("—").to_string();
             let ts = pkg.updated_at.format("%Y-%m-%d").to_string();
             format!(
                 r#"<tr>
@@ -184,10 +186,8 @@ pub async fn package_detail_page(
     }
 
     // Build version_id -> version string map for dist-tag display
-    let version_map: std::collections::HashMap<uuid::Uuid, String> = versions
-        .iter()
-        .map(|v| (v.id, v.version.clone()))
-        .collect();
+    let version_map: std::collections::HashMap<uuid::Uuid, String> =
+        versions.iter().map(|v| (v.id, v.version.clone())).collect();
 
     let desc = pkg.description.as_deref().unwrap_or("No description.");
     let scope = pkg

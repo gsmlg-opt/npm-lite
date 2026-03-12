@@ -2,15 +2,14 @@
 //! and records a publish event – all inside a single database transaction.
 
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, EntityTrait,
-    QueryFilter, TransactionTrait,
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter,
+    TransactionTrait,
 };
 use serde_json::Value;
 use uuid::Uuid;
 
 use npm_entity::{
-    dist_tags,
-    package_acl,
+    dist_tags, package_acl,
     package_versions::{self, Column as VersionCol, Entity as VersionEntity},
     packages::{self, Column as PkgCol, Entity as PkgEntity},
     publish_events,
@@ -109,12 +108,10 @@ pub async fn execute_publish(
                             id: Set(Uuid::new_v4()),
                             name: Set(package_name.clone()),
                             scope: Set(scope),
-                            description: Set(
-                                metadata
-                                    .get("description")
-                                    .and_then(Value::as_str)
-                                    .map(str::to_string),
-                            ),
+                            description: Set(metadata
+                                .get("description")
+                                .and_then(Value::as_str)
+                                .map(str::to_string)),
                             created_at: Set(now),
                             updated_at: Set(now),
                         };

@@ -29,8 +29,8 @@ pub mod state;
 pub use state::{AppState, RegistryConfig};
 
 use axum::{
-    routing::{delete, get, put},
     Router,
+    routing::{delete, get, put},
 };
 
 use handlers::{
@@ -65,19 +65,13 @@ pub fn registry_router() -> Router<AppState> {
         //
         // npm login / npm adduser
         //   PUT /-/user/org.couchdb.user:{username}
-        .route(
-            "/-/user/:username",
-            put(login_or_adduser),
-        )
+        .route("/-/user/:username", put(login_or_adduser))
         // ── Dist-tags ────────────────────────────────────────────────────
         //
         // List:   GET  /-/package/{pkg}/dist-tags
         // Set:    PUT  /-/package/{pkg}/dist-tags/{tag}
         // Delete: DELETE /-/package/{pkg}/dist-tags/{tag}
-        .route(
-            "/-/package/:package/dist-tags",
-            get(list_dist_tags),
-        )
+        .route("/-/package/:package/dist-tags", get(list_dist_tags))
         .route(
             "/-/package/:package/dist-tags/:tag",
             put(set_dist_tag).delete(delete_dist_tag),
@@ -85,10 +79,7 @@ pub fn registry_router() -> Router<AppState> {
         // ── Admin unpublish ───────────────────────────────────────────────
         //
         // Soft-delete a single version or all versions of a package.
-        .route(
-            "/-/admin/package/:package",
-            delete(unpublish_package),
-        )
+        .route("/-/admin/package/:package", delete(unpublish_package))
         .route(
             "/-/admin/package/:package/:version",
             delete(unpublish_version),
@@ -103,14 +94,8 @@ pub fn registry_router() -> Router<AppState> {
         // GET  /@{scope}/{name}/{version}       – version metadata
         // GET  /@{scope}/{name}                 – packument
         // PUT  /@{scope}/{name}                 – publish
-        .route(
-            "/@:scope/:name/-/:filename",
-            get(get_scoped_tarball),
-        )
-        .route(
-            "/@:scope/:name/:version",
-            get(get_scoped_version),
-        )
+        .route("/@:scope/:name/-/:filename", get(get_scoped_tarball))
+        .route("/@:scope/:name/:version", get(get_scoped_version))
         .route(
             "/@:scope/:name",
             get(get_scoped_packument).put(publish_scoped_package),
@@ -121,16 +106,7 @@ pub fn registry_router() -> Router<AppState> {
         // GET  /{package}/{version}       – version metadata
         // GET  /{package}                 – packument
         // PUT  /{package}                 – publish
-        .route(
-            "/:package/-/:filename",
-            get(get_tarball),
-        )
-        .route(
-            "/:package/:version",
-            get(get_version),
-        )
-        .route(
-            "/:package",
-            get(get_packument).put(publish_package),
-        )
+        .route("/:package/-/:filename", get(get_tarball))
+        .route("/:package/:version", get(get_version))
+        .route("/:package", get(get_packument).put(publish_package))
 }

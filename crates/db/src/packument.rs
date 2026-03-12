@@ -5,7 +5,7 @@
 //! version's `package.json`, a `dist-tags` map, and top-level summary fields.
 
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use npm_entity::{
     package_versions::{Column as VersionCol, Entity as VersionEntity},
@@ -25,7 +25,10 @@ fn build_tarball_url(registry_url: &str, package_name: &str, version: &str) -> S
         format!("{}/@{}/{}/-/{}-{}.tgz", base, scope, name, name, version)
     } else {
         // Plain: {base}/{name}/-/{name}-{version}.tgz
-        format!("{}/{}/-/{}-{}.tgz", base, package_name, package_name, version)
+        format!(
+            "{}/{}/-/{}-{}.tgz",
+            base, package_name, package_name, version
+        )
     }
 }
 
@@ -62,10 +65,8 @@ pub async fn build_packument(
         .await?;
 
     // Build a version-id → version-string lookup so we can resolve tag refs.
-    let id_to_version: std::collections::HashMap<uuid::Uuid, String> = versions
-        .iter()
-        .map(|v| (v.id, v.version.clone()))
-        .collect();
+    let id_to_version: std::collections::HashMap<uuid::Uuid, String> =
+        versions.iter().map(|v| (v.id, v.version.clone())).collect();
 
     // 4. Build the "versions" map: { "1.0.0": { ...package.json with dist... } }
     let mut versions_map = serde_json::Map::new();

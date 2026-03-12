@@ -3,12 +3,12 @@
 //! - `GET /{package}/{version}`
 
 use axum::{
-    extract::{Path, State},
     Json,
+    extract::{Path, State},
 };
 use npm_entity::{package_versions, packages};
 use sea_orm::{ColumnTrait, EntityTrait, ModelTrait, QueryFilter};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::{
     auth::AuthUser,
@@ -56,9 +56,7 @@ async fn fetch_version_metadata(
         .filter(packages::Column::Name.eq(package_name))
         .one(&state.db)
         .await?
-        .ok_or_else(|| {
-            RegistryError::NotFound(format!("package '{}' not found", package_name))
-        })?;
+        .ok_or_else(|| RegistryError::NotFound(format!("package '{}' not found", package_name)))?;
 
     // Resolve the specific version (not soft-deleted).
     let ver = pkg

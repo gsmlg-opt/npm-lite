@@ -7,10 +7,10 @@
 //!   enforce a minimum required role.
 
 use axum::{
-    extract::{FromRef, FromRequestParts},
-    http::{request::Parts, StatusCode},
-    response::{IntoResponse, Response},
     Json,
+    extract::{FromRef, FromRequestParts},
+    http::{StatusCode, request::Parts},
+    response::{IntoResponse, Response},
 };
 use npm_core::types::Role;
 use npm_entity::{tokens, users};
@@ -199,4 +199,3 @@ where
         Ok(PublishUser(user))
     }
 }
-

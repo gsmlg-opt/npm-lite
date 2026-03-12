@@ -31,12 +31,7 @@ impl MigrationTrait for Migration {
                             .unique_key(),
                     )
                     .col(ColumnDef::new(Users::PasswordHash).text().not_null())
-                    .col(
-                        ColumnDef::new(Users::Email)
-                            .text()
-                            .not_null()
-                            .default(""),
-                    )
+                    .col(ColumnDef::new(Users::Email).text().not_null().default(""))
                     .col(
                         ColumnDef::new(Users::Role)
                             .text()
@@ -72,12 +67,7 @@ impl MigrationTrait for Migration {
                             .primary_key()
                             .default(Expr::cust("gen_random_uuid()")),
                     )
-                    .col(
-                        ColumnDef::new(Teams::Name)
-                            .text()
-                            .not_null()
-                            .unique_key(),
-                    )
+                    .col(ColumnDef::new(Teams::Name).text().not_null().unique_key())
                     .col(ColumnDef::new(Teams::Description).text().null())
                     .col(
                         ColumnDef::new(Teams::CreatedAt)
@@ -240,7 +230,11 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(PackageVersions::Sha512).binary().not_null())
                     .col(ColumnDef::new(PackageVersions::Shasum).text().not_null())
                     .col(ColumnDef::new(PackageVersions::Integrity).text().not_null())
-                    .col(ColumnDef::new(PackageVersions::Size).big_integer().not_null())
+                    .col(
+                        ColumnDef::new(PackageVersions::Size)
+                            .big_integer()
+                            .not_null(),
+                    )
                     .col(
                         ColumnDef::new(PackageVersions::Metadata)
                             .json()

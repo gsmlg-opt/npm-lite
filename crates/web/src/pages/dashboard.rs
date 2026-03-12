@@ -2,7 +2,7 @@ use axum::{extract::State, response::Html};
 use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect};
 use tracing::instrument;
 
-use npm_entity::{packages, package_versions, publish_events};
+use npm_entity::{package_versions, packages, publish_events};
 
 use crate::{
     error::WebResult,
@@ -30,10 +30,8 @@ pub async fn dashboard_page(State(state): State<AppState>) -> WebResult<Html<Str
 
     // Build a package id -> name map for display
     let all_packages = packages::Entity::find().all(db).await?;
-    let pkg_map: std::collections::HashMap<uuid::Uuid, String> = all_packages
-        .into_iter()
-        .map(|p| (p.id, p.name))
-        .collect();
+    let pkg_map: std::collections::HashMap<uuid::Uuid, String> =
+        all_packages.into_iter().map(|p| (p.id, p.name)).collect();
 
     let stats = format!(
         r#"<div class="stats stats-horizontal shadow w-full mb-8 flex-wrap">
@@ -41,9 +39,21 @@ pub async fn dashboard_page(State(state): State<AppState>) -> WebResult<Html<Str
   {ver}
   {evt}
 </div>"#,
-        pkg = stat_card("Total Packages", &package_count.to_string(), "unique package names"),
-        ver = stat_card("Total Versions", &version_count.to_string(), "published tarballs"),
-        evt = stat_card("Publish Events", &event_count.to_string(), "all-time actions"),
+        pkg = stat_card(
+            "Total Packages",
+            &package_count.to_string(),
+            "unique package names"
+        ),
+        ver = stat_card(
+            "Total Versions",
+            &version_count.to_string(),
+            "published tarballs"
+        ),
+        evt = stat_card(
+            "Publish Events",
+            &event_count.to_string(),
+            "all-time actions"
+        ),
     );
 
     let rows: String = recent_events
@@ -113,10 +123,7 @@ pub async fn dashboard_page(State(state): State<AppState>) -> WebResult<Html<Str
                     .get(&evt.package_id)
                     .map(|s| s.as_str())
                     .unwrap_or("(unknown)");
-                let err_msg = evt
-                    .error_message
-                    .as_deref()
-                    .unwrap_or("(no details)");
+                let err_msg = evt.error_message.as_deref().unwrap_or("(no details)");
                 let ts = evt.created_at.format("%Y-%m-%d %H:%M UTC").to_string();
                 format!(
                     r#"<tr>

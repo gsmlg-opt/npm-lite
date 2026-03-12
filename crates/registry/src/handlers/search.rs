@@ -1,8 +1,11 @@
-use axum::{extract::{Query, State}, Json};
-use serde::{Deserialize};
-use serde_json::{json, Value};
+use crate::{auth::AuthUser, error::RegistryError, state::AppState};
+use axum::{
+    Json,
+    extract::{Query, State},
+};
 use npm_db::PackageRepo;
-use crate::{auth::AuthUser, state::AppState, error::RegistryError};
+use serde::Deserialize;
+use serde_json::{Value, json};
 
 #[derive(Deserialize)]
 pub struct SearchQuery {
@@ -20,22 +23,27 @@ pub async fn search(
     let size = query.size.unwrap_or(20).min(250);
     let from = query.from.unwrap_or(0);
 
-    let packages = PackageRepo::list(&state.db, Some(&text), from, size).await
+    let packages = PackageRepo::list(&state.db, Some(&text), from, size)
+        .await
         .map_err(|e| RegistryError::Internal(e.to_string()))?;
 
-    let objects: Vec<Value> = packages.iter().map(|p| {
-        json!({
-            "package": {
-                "name": p.name,
-                "scope": p.scope,
-                "version": "latest",
-                "description": p.description,
-                "date": p.updated_at.to_rfc3339(),
-            }
+    let objects: Vec<Value> = packages
+        .iter()
+        .map(|p| {
+            json!({
+                "package": {
+                    "name": p.name,
+                    "scope": p.scope,
+                    "version": "latest",
+                    "description": p.description,
+                    "date": p.updated_at.to_rfc3339(),
+                }
+            })
         })
-    }).collect();
+        .collect();
 
-    let total = PackageRepo::count(&state.db).await
+    let total = PackageRepo::count(&state.db)
+        .await
         .map_err(|e| RegistryError::Internal(e.to_string()))?;
 
     Ok(Json(json!({

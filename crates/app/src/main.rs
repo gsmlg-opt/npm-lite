@@ -7,9 +7,9 @@ use axum::Router;
 use sea_orm::Database;
 use tower_http::trace::TraceLayer;
 use tracing::info;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
-use npm_registry::{registry_router, AppState, RegistryConfig};
+use npm_registry::{AppState, RegistryConfig, registry_router};
 use npm_storage::S3Storage;
 use npm_web::web_router;
 
@@ -95,7 +95,10 @@ async fn main() -> anyhow::Result<()> {
     //
     // Registry API routes at "/" and admin UI routes at "/admin".
     let app: Router = Router::new()
-        .nest("/admin", web_router(state.clone()).with_state(state.clone()))
+        .nest(
+            "/admin",
+            web_router(state.clone()).with_state(state.clone()),
+        )
         .merge(registry_router().with_state(state))
         .layer(TraceLayer::new_for_http());
 
@@ -114,10 +117,10 @@ async fn main() -> anyhow::Result<()> {
 /// S3-compatible endpoint (e.g. MinIO) at that URL.
 async fn build_storage(cfg: &Config) -> anyhow::Result<S3Storage> {
     use aws_config::BehaviorVersion;
-    use aws_sdk_s3::{config::Region, Client};
+    use aws_sdk_s3::{Client, config::Region};
 
-    let mut sdk_builder = aws_config::defaults(BehaviorVersion::latest())
-        .region(Region::new(cfg.s3_region.clone()));
+    let mut sdk_builder =
+        aws_config::defaults(BehaviorVersion::latest()).region(Region::new(cfg.s3_region.clone()));
 
     if let Some(endpoint) = &cfg.s3_endpoint {
         sdk_builder = sdk_builder.endpoint_url(endpoint);

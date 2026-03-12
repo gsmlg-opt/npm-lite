@@ -4,8 +4,8 @@ use chrono::{Duration, Utc};
 use tracing::{debug, info, instrument, warn};
 
 use crate::{
-    error::{Result, StorageError},
     S3Storage,
+    error::{Result, StorageError},
 };
 
 /// Summary of a single garbage-collection run.
@@ -67,10 +67,7 @@ impl<'a> OrphanGc<'a> {
         let cutoff = Utc::now() - self.threshold;
         debug!(%cutoff, "scanning S3 for orphan blobs");
 
-        let objects = self
-            .storage
-            .list_objects(self.prefix.as_deref())
-            .await?;
+        let objects = self.storage.list_objects(self.prefix.as_deref()).await?;
 
         let orphans: Vec<String> = objects
             .into_iter()

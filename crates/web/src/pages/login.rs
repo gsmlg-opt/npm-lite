@@ -1,8 +1,8 @@
 use axum::{
-    extract::State,
-    http::{header, HeaderValue, StatusCode},
-    response::{Html, IntoResponse, Response},
     Form,
+    extract::State,
+    http::{HeaderValue, StatusCode, header},
+    response::{Html, IntoResponse, Response},
 };
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde::Deserialize;
@@ -21,9 +21,7 @@ pub async fn login_page() -> Html<String> {
 }
 
 fn login_form(error: Option<&str>) -> String {
-    let error_html = error
-        .map(|e| alert("error", e))
-        .unwrap_or_default();
+    let error_html = error.map(|e| alert("error", e)).unwrap_or_default();
 
     format!(
         r#"{error_html}
@@ -107,9 +105,7 @@ pub async fn logout() -> Response {
     headers.insert(header::LOCATION, HeaderValue::from_static("/admin/login"));
     headers.insert(
         header::SET_COOKIE,
-        HeaderValue::from_static(
-            "admin_user=; HttpOnly; SameSite=Lax; Path=/admin; Max-Age=0",
-        ),
+        HeaderValue::from_static("admin_user=; HttpOnly; SameSite=Lax; Path=/admin; Max-Age=0"),
     );
     (StatusCode::SEE_OTHER, headers).into_response()
 }

@@ -66,10 +66,7 @@ fn validate_plain(name: &str) -> Result<(), ValidationError> {
         return Err(ValidationError::InvalidStart);
     }
 
-    let invalid: String = name
-        .chars()
-        .filter(|c| !is_valid_name_char(*c))
-        .collect();
+    let invalid: String = name.chars().filter(|c| !is_valid_name_char(*c)).collect();
 
     if !invalid.is_empty() {
         return Err(ValidationError::InvalidCharacters(invalid));
@@ -84,9 +81,7 @@ fn validate_scoped(name: &str) -> Result<String, ValidationError> {
     let rest = &name[1..];
 
     let slash_pos = rest.find('/').ok_or_else(|| {
-        ValidationError::MalformedScope(
-            "scoped package must have the form @scope/name".to_string(),
-        )
+        ValidationError::MalformedScope("scoped package must have the form @scope/name".to_string())
     })?;
 
     let scope = &rest[..slash_pos];
@@ -195,10 +190,7 @@ mod tests {
     #[test]
     fn rejects_too_long() {
         let long = "a".repeat(215);
-        assert_eq!(
-            validate_package_name(&long),
-            Err(ValidationError::TooLong)
-        );
+        assert_eq!(validate_package_name(&long), Err(ValidationError::TooLong));
     }
 
     #[test]

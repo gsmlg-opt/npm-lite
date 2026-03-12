@@ -5,15 +5,15 @@
 //! - `DELETE /-/package/{package}/dist-tags/{tag}`    – remove a dist-tag
 
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
-    Json,
 };
 use npm_entity::{dist_tags, package_versions, packages};
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, ModelTrait, QueryFilter,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -38,7 +38,8 @@ pub async fn list_dist_tags(
 ) -> Result<Json<Value>> {
     let pkg = resolve_package(&state, &package).await?;
 
-    let tag_rows: Vec<dist_tags::Model> = pkg.find_related(dist_tags::Entity).all(&state.db).await?;
+    let tag_rows: Vec<dist_tags::Model> =
+        pkg.find_related(dist_tags::Entity).all(&state.db).await?;
 
     // Build { tag -> version_str } map, excluding soft-deleted versions.
     let version_ids: Vec<Uuid> = tag_rows.iter().map(|t| t.version_id).collect();
@@ -48,7 +49,8 @@ pub async fn list_dist_tags(
         .all(&state.db)
         .await?;
 
-    let id_to_ver: HashMap<Uuid, String> = versions.iter().map(|v| (v.id, v.version.clone())).collect();
+    let id_to_ver: HashMap<Uuid, String> =
+        versions.iter().map(|v| (v.id, v.version.clone())).collect();
 
     let mut map = serde_json::Map::new();
     for tag in &tag_rows {
@@ -72,7 +74,11 @@ pub async fn set_dist_tag(
     Json(version_str): Json<String>,
 ) -> Result<Json<Value>> {
     // Validate dist-tag name: must be non-empty, lowercase ASCII alphanumeric + hyphens + dots.
-    if tag.is_empty() || !tag.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '.') {
+    if tag.is_empty()
+        || !tag
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '.')
+    {
         return Err(RegistryError::BadRequest(format!(
             "invalid dist-tag name '{}': must be lowercase alphanumeric, hyphens, or dots",
             tag
@@ -166,10 +172,7 @@ pub async fn delete_dist_tag(
 // Helpers
 // ---------------------------------------------------------------------------
 
-async fn resolve_package(
-    state: &AppState,
-    package_name: &str,
-) -> Result<packages::Model> {
+async fn resolve_package(state: &AppState, package_name: &str) -> Result<packages::Model> {
     packages::Entity::find()
         .filter(packages::Column::Name.eq(package_name))
         .one(&state.db)

@@ -3,18 +3,14 @@
 use axum::{
     body::Body,
     extract::{Path, State},
-    http::{header, StatusCode},
+    http::{StatusCode, header},
     response::Response,
 };
 use futures::StreamExt;
 use npm_entity::{package_versions, packages};
 use sea_orm::{ColumnTrait, EntityTrait, ModelTrait, QueryFilter};
 
-use crate::{
-    auth::AuthUser,
-    error::RegistryError,
-    state::AppState,
-};
+use crate::{auth::AuthUser, error::RegistryError, state::AppState};
 
 /// `GET /{package}/-/{filename}`
 pub async fn get_tarball(
@@ -75,9 +71,7 @@ async fn do_stream(
         .await
         .map_err(RegistryError::Storage)?;
 
-    let body_stream = stream.map(|chunk| {
-        chunk.map_err(|e| std::io::Error::other(e.to_string()))
-    });
+    let body_stream = stream.map(|chunk| chunk.map_err(|e| std::io::Error::other(e.to_string())));
 
     let body = Body::from_stream(body_stream);
 
@@ -86,10 +80,7 @@ async fn do_stream(
         .header(header::CONTENT_TYPE, "application/octet-stream")
         .header(
             header::CONTENT_DISPOSITION,
-            format!(
-                "attachment; filename=\"{}\"",
-                sanitize_filename(filename)
-            ),
+            format!("attachment; filename=\"{}\"", sanitize_filename(filename)),
         )
         .header(header::CONTENT_LENGTH, size.to_string())
         .body(body)

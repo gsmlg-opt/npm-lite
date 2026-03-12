@@ -39,15 +39,11 @@ pub async fn activity_page(
     let all_packages = packages::Entity::find().all(db).await?;
     let all_users = users::Entity::find().all(db).await?;
 
-    let pkg_map: std::collections::HashMap<uuid::Uuid, String> = all_packages
-        .into_iter()
-        .map(|p| (p.id, p.name))
-        .collect();
+    let pkg_map: std::collections::HashMap<uuid::Uuid, String> =
+        all_packages.into_iter().map(|p| (p.id, p.name)).collect();
 
-    let user_map: std::collections::HashMap<uuid::Uuid, String> = all_users
-        .into_iter()
-        .map(|u| (u.id, u.username))
-        .collect();
+    let user_map: std::collections::HashMap<uuid::Uuid, String> =
+        all_users.into_iter().map(|u| (u.id, u.username)).collect();
 
     let rows: String = events
         .iter()

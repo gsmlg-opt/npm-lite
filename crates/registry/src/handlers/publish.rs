@@ -22,11 +22,11 @@
 //! ```
 
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
-    Json,
 };
-use base64::{engine::general_purpose::STANDARD, Engine as _};
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use bytes::Bytes;
 use npm_core::{integrity::compute_integrity, validation::validate_package_name};
 use npm_db::AclRepo;
@@ -36,7 +36,7 @@ use sea_orm::{
     TransactionTrait,
 };
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -106,8 +106,7 @@ async fn do_publish(
     body: PublishBody,
 ) -> Result<(StatusCode, Json<Value>)> {
     // 1. Validate the package name.
-    validate_package_name(&package_name)
-        .map_err(|e| RegistryError::BadRequest(e.to_string()))?;
+    validate_package_name(&package_name).map_err(|e| RegistryError::BadRequest(e.to_string()))?;
 
     // 2. Ensure the name in the path matches the name in the body.
     if body.name != package_name {
@@ -154,14 +153,10 @@ async fn do_publish(
 
             if acl_count > 0 {
                 // ACL entries exist – enforce permission.
-                let allowed = AclRepo::check_permission(
-                    &state.db,
-                    actor_id,
-                    &package_name,
-                    "publish",
-                )
-                .await
-                .map_err(|e| RegistryError::Internal(e.to_string()))?;
+                let allowed =
+                    AclRepo::check_permission(&state.db, actor_id, &package_name, "publish")
+                        .await
+                        .map_err(|e| RegistryError::Internal(e.to_string()))?;
 
                 if !allowed {
                     return Err(RegistryError::Forbidden(format!(
@@ -191,7 +186,9 @@ async fn do_publish(
     let tarball_bytes: Bytes = STANDARD
         .decode(&attachment.data)
         .map(Bytes::from)
-        .map_err(|e| RegistryError::BadRequest(format!("attachment data is not valid base64: {}", e)))?;
+        .map_err(|e| {
+            RegistryError::BadRequest(format!("attachment data is not valid base64: {}", e))
+        })?;
 
     // 7. Compute integrity hashes.
     let hashes = compute_integrity(&tarball_bytes);
@@ -202,11 +199,7 @@ async fn do_publish(
     // 9. Upload tarball to S3.
     state
         .storage
-        .upload(
-            &s3_key,
-            tarball_bytes.clone(),
-            "application/octet-stream",
-        )
+        .upload(&s3_key, tarball_bytes.clone(), "application/octet-stream")
         .await
         .map_err(RegistryError::Storage)?;
 
