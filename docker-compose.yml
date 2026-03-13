@@ -1,17 +1,17 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: docker-io.gsmlg.dev/library/postgres:16-alpine
     environment:
       POSTGRES_USER: npm
       POSTGRES_PASSWORD: npm
       POSTGRES_DB: npm_registry
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
 
   minio:
-    image: minio/minio
+    image: docker-io.gsmlg.dev/minio/minio
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: minioadmin
@@ -23,7 +23,7 @@ services:
       - s3data:/data
 
   createbuckets:
-    image: minio/mc
+    image: docker-io.gsmlg.dev/minio/mc
     depends_on:
       - minio
     entrypoint: >
