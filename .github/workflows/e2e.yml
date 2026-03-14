@@ -23,22 +23,24 @@ jobs:
           --health-timeout 5s
           --health-retries 10
 
-      minio:
-        image: minio/minio
-        env:
-          MINIO_ROOT_USER: minioadmin
-          MINIO_ROOT_PASSWORD: minioadmin
-        ports:
-          - 9000:9000
-        options: >-
-          --health-cmd "mc ready local || curl -sf http://localhost:9000/minio/health/live"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-        # minio/minio default entrypoint handles `server /data`
-
     steps:
       - uses: actions/checkout@v4
+
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio --network host \
+            -e MINIO_ROOT_USER=minioadmin \
+            -e MINIO_ROOT_PASSWORD=minioadmin \
+            minio/minio server /data
+          # Wait for MinIO to be ready
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:9000/minio/health/live > /dev/null 2>&1; then
+              echo "MinIO is ready"
+              break
+            fi
+            echo "Waiting for MinIO... ($i/30)"
+            sleep 1
+          done
 
       - name: Create S3 bucket
         run: |
@@ -164,4 +166,8 @@ jobs:
 
       - name: Show registry logs on failure
         if: failure()
-        run: docker logs npm-registry
+        run: |
+          echo "=== MinIO logs ==="
+          docker logs minio 2>&1 || true
+          echo "=== Registry logs ==="
+          docker logs npm-registry 2>&1 || true
